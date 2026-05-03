@@ -1,10 +1,10 @@
 //! # Objects
 
 // ---- Imports ------------
-use crate::{errors::{CoreAudioError}, property::{Property, ReadWrite, Listenable}, data_types::Scope};
+use crate::{data_types::Scope, errors::{CoreAudioError, OSStatusCheck}, property::{Listenable, Property, ReadWrite}};
 
-use std::{marker::PhantomData};
-use coreaudio_sys::{AudioObjectID, kAudioObjectSystemObject};
+use std::{ffi::c_void, marker::PhantomData, ptr::null};
+use coreaudio_sys::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectSetPropertyData, kAudioObjectSystemObject};
 
 // ---- Structs ------------
 /// Identifier for `AudioObject` to expose system object functions
@@ -59,20 +59,12 @@ impl AudioObject<System> {
         todo!()
     }
 
-    /// Checks if a property exists on an object and returns `true` if it does
-    pub fn has_property<V, A, L>(
-        &self,
-        property: Property<V, System, A, L>,
-    ) -> bool {
-        false
-    }
-
     /// Gets the value of an objects property
     pub fn get_property<V, A, L>(
         &self,
         property: Property<V, System, A, L>,
     ) -> Result<V, CoreAudioError> {
-        todo!()
+        get_property_internal(self.id, property)
     }
 
     /// Sets the value of an objects property
@@ -81,7 +73,7 @@ impl AudioObject<System> {
         property: Property<V, System, ReadWrite, L>,
         value: V,
     ) -> Result<(), CoreAudioError> {
-        todo!()
+        set_property_internal(self.id, property, value)
     }
 
     /// Adds a listener to a property
@@ -106,20 +98,12 @@ impl AudioObject<Device> {
         todo!()
     }
 
-    /// Checks if a property exists on an object and returns `true` if it does
-    pub fn has_property<V, A, L>(
-        &self,
-        property: Property<V, Device, A, L>,
-    ) -> bool {
-        false
-    }
-
     /// Gets the value of an objects property
     pub fn get_property<V, A, L>(
         &self,
         property: Property<V, Device, A, L>,
     ) -> Result<V, CoreAudioError> {
-        todo!()
+        get_property_internal(self.id, property)
     }
 
     /// Sets the value of an objects property
@@ -128,7 +112,7 @@ impl AudioObject<Device> {
         property: Property<V, Device, ReadWrite, L>,
         value: V,
     ) -> Result<(), CoreAudioError> {
-        todo!()
+        set_property_internal(self.id, property, value)
     }
 
     /// Adds a listener to a property
@@ -141,5 +125,60 @@ impl AudioObject<Device> {
 }
 
 impl AudioObject<Stream> {
+    /// Gets the value of an streams property
+    pub fn get_property<V, A, L>(
+        &self,
+        property: Property<V, Stream, A, L>,
+    ) -> Result<V, CoreAudioError> {
+        get_property_internal(self.id, property)
+    }
+}
 
+// ---- Functions -----------
+fn get_property_internal<V, D, A, L>(
+    id: AudioObjectID,
+    property: Property<V, D, A, L>
+) -> Result<V, CoreAudioError> {
+    unsafe {
+        let mut size = 0u32;
+        AudioObjectGetPropertyDataSize(
+            id,
+            &property.address,
+            0,
+            null(),
+            &mut size,
+        ).check()?;
+
+        let mut buffer = vec![0u8; size as usize];
+        AudioObjectGetPropertyData(
+            id,
+            &property.address,
+            0,
+            null(),
+            &mut size,
+            buffer.as_mut_ptr() as *mut c_void,
+        ).check()?;
+
+        (property.read)(&buffer)
+    }
+}
+
+fn set_property_internal<V, D, A, L>(
+    id: AudioObjectID,
+    property: Property<V, D, A, L>,
+    value: V,
+) -> Result<(), CoreAudioError> {
+    unsafe {
+        let size = size_of::<V>() as u32;
+        AudioObjectSetPropertyData(
+            id,
+            &property.address,
+            0,
+            null(),
+            size,
+            &value as *const _ as *mut c_void,
+        ).check()?;
+
+        Ok(())
+    }
 }

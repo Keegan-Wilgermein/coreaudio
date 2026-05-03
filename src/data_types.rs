@@ -65,8 +65,21 @@ pub enum SampleFormat {
 }
 
 impl SampleFormat {
-    fn from(bits_per_channel: u32, encoding: SampleEncoding) -> Self {
-        Self::F32
+    fn from(bits_per_channel: u32, encoding: SampleEncoding) -> Option<Self> {
+        match (encoding, bits_per_channel) {
+            (SampleEncoding::UnSignedInt, 8) => Some(SampleFormat::U8),
+            (SampleEncoding::UnSignedInt, 16) => Some(SampleFormat::U16),
+            (SampleEncoding::UnSignedInt, 32) => Some(SampleFormat::U32),
+            (SampleEncoding::SignedInt, 8) => Some(SampleFormat::I8),
+            (SampleEncoding::SignedInt, 16) => Some(SampleFormat::I16),
+            (SampleEncoding::SignedInt, 20) => Some(SampleFormat::I20),
+            (SampleEncoding::SignedInt, 24) => Some(SampleFormat::I24),
+            (SampleEncoding::SignedInt, 32) => Some(SampleFormat::I32),
+            (SampleEncoding::SignedInt, 64) => Some(SampleFormat::I64),
+            (SampleEncoding::Float, 32) => Some(SampleFormat::F32),
+            (SampleEncoding::Float, 64) => Some(SampleFormat::F64),
+            _ => None,
+        }
     }
 
     pub fn resample<T>(self, sample: f32) -> T
@@ -259,7 +272,7 @@ pub struct StreamDescription {
     sample_rate: f64,
     format_id: FormatId,
     flags: FormatFlags,
-    sample_format: SampleFormat,
+    sample_format: Option<SampleFormat>,
     bytes_per_packet: u32,
     frames_per_packet: u32,
     bytes_per_frame: u32,
@@ -318,7 +331,7 @@ impl StreamDescription {
         self.flags
     }
 
-    pub fn sample_format(&self) -> SampleFormat {
+    pub fn sample_format(&self) -> Option<SampleFormat> {
         self.sample_format
     }
 
