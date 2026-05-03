@@ -65,7 +65,7 @@ impl AudioObject<System> {
     pub fn devices(&self) ->
     Result<Vec<AudioObject<Device>>, CoreAudioError> {
         Ok(
-            get_property_internal(self.id, SYSTEM_DEVICES.address, SYSTEM_DEVICES.read)?
+            get_property_internal(self.id, SYSTEM_DEVICES.address, SYSTEM_DEVICES.read, None)?
             .iter()
             .map(|id| {
                 AudioObject::<Device>::from(*id)
@@ -100,19 +100,19 @@ impl AudioObject<System> {
     }
 
     pub fn system_box_list(&self) -> Result<Vec<AudioObjectID>, CoreAudioError> {
-        get_property_internal(self.id, SYSTEM_BOX_LIST.address, SYSTEM_BOX_LIST.read)
+        get_property_internal(self.id, SYSTEM_BOX_LIST.address, SYSTEM_BOX_LIST.read, None)
     }
 
     pub fn system_clock_device_list(&self) -> Result<Vec<AudioObjectID>, CoreAudioError> {
-        get_property_internal(self.id, SYSTEM_CLOCK_DEVICE_LIST.address, SYSTEM_CLOCK_DEVICE_LIST.read)
+        get_property_internal(self.id, SYSTEM_CLOCK_DEVICE_LIST.address, SYSTEM_CLOCK_DEVICE_LIST.read, None)
     }
 
     pub fn system_plugin_list(&self) -> Result<Vec<AudioObjectID>, CoreAudioError> {
-        get_property_internal(self.id, SYSTEM_PLUGIN_LIST.address, SYSTEM_PLUGIN_LIST.read)
+        get_property_internal(self.id, SYSTEM_PLUGIN_LIST.address, SYSTEM_PLUGIN_LIST.read, None)
     }
 
     pub fn system_tap_list(&self) -> Result<Vec<AudioObjectID>, CoreAudioError> {
-        get_property_internal(self.id, SYSTEM_TAP_LIST.address, SYSTEM_TAP_LIST.read)
+        get_property_internal(self.id, SYSTEM_TAP_LIST.address, SYSTEM_TAP_LIST.read, None)
     }
 
     /// Gets the value of an objects property
@@ -120,7 +120,7 @@ impl AudioObject<System> {
         &self,
         property: Property<V, System, A, L>,
     ) -> Result<V, CoreAudioError> {
-        get_property_internal(self.id, property.address, property.read)
+        get_property_internal(self.id, property.address, property.read, None)
     }
 
     /// Sets the value of an objects property
@@ -129,7 +129,7 @@ impl AudioObject<System> {
         property: Property<V, System, ReadWrite, L>,
         value: V,
     ) -> Result<(), CoreAudioError> {
-        set_property_internal(self.id, property, value)
+        set_property_internal(self.id, property, value, None)
     }
 
     /// Adds a listener to a property
@@ -174,11 +174,11 @@ impl AudioObject<Device> {
     }
 
     pub fn avaliable_sample_rates(&self) -> Result<Vec<SampleRateRange>, CoreAudioError> {
-        get_property_internal(self.id, DEVICE_AVAILABLE_SAMPLE_RATES.address, DEVICE_AVAILABLE_SAMPLE_RATES.read)
+        get_property_internal(self.id, DEVICE_AVAILABLE_SAMPLE_RATES.address, DEVICE_AVAILABLE_SAMPLE_RATES.read, None)
     }
 
     pub fn avaliable_buffer_sizes(&self) -> Result<BufferFrameSizeRange, CoreAudioError> {
-        get_property_internal(self.id, DEVICE_BUFFER_FRAME_SIZE_RANGE.address, DEVICE_BUFFER_FRAME_SIZE_RANGE.read)
+        get_property_internal(self.id, DEVICE_BUFFER_FRAME_SIZE_RANGE.address, DEVICE_BUFFER_FRAME_SIZE_RANGE.read, None)
     }
 
     /// Gets the value of an objects property
@@ -186,7 +186,7 @@ impl AudioObject<Device> {
         &self,
         property: Property<V, Device, A, L>,
     ) -> Result<V, CoreAudioError> {
-        get_property_internal(self.id, property.address, property.read)
+        get_property_internal(self.id, property.address, property.read, None)
     }
 
     /// Sets the value of an objects property
@@ -195,7 +195,7 @@ impl AudioObject<Device> {
         property: Property<V, Device, ReadWrite, L>,
         value: V,
     ) -> Result<(), CoreAudioError> {
-        set_property_internal(self.id, property, value)
+        set_property_internal(self.id, property, value, None)
     }
 
     /// Adds a listener to a property
@@ -219,11 +219,11 @@ impl AudioObject<Device> {
 
 impl AudioObject<Stream> {
     pub fn stream_virtual_format(&self) -> Result<StreamDescription, CoreAudioError> {
-        get_property_internal(self.id, STREAM_VIRTUAL_FORMAT.address, STREAM_VIRTUAL_FORMAT.read)
+        get_property_internal(self.id, STREAM_VIRTUAL_FORMAT.address, STREAM_VIRTUAL_FORMAT.read, None)
     }
 
     pub fn stream_physical_format(&self) -> Result<StreamDescription, CoreAudioError> {
-        get_property_internal(self.id, STREAM_PHYSICAL_FORMAT.address, STREAM_PHYSICAL_FORMAT.read)
+        get_property_internal(self.id, STREAM_PHYSICAL_FORMAT.address, STREAM_PHYSICAL_FORMAT.read, None)
     }
 
     /// Gets the value of an streams property
@@ -231,7 +231,7 @@ impl AudioObject<Stream> {
         &self,
         property: Property<V, Stream, A, L>,
     ) -> Result<V, CoreAudioError> {
-        get_property_internal(self.id, property.address, property.read)
+        get_property_internal(self.id, property.address, property.read, None)
     }
 
     /// Adds a listener to a property
@@ -248,14 +248,22 @@ pub(crate) fn get_property_internal<T>(
     id: AudioObjectID,
     address: AudioObjectPropertyAddress,
     read: fn(&[u8]) -> Result<T, CoreAudioError>,
+    qualifier: Option<&[u8]>,
  ) -> Result<T, CoreAudioError> {
+    let (q_len, q_data) = qualifier.map_or(
+        (0, null()),
+        |q| {
+            (q.len() as u32, q.as_ptr() as *const c_void)
+        }
+    );
+
     unsafe {
         let mut size = 0u32;
         AudioObjectGetPropertyDataSize(
             id,
             &address,
-            0,
-            null(),
+            q_len,
+            q_data,
             &mut size,
         ).check()?;
 
@@ -263,8 +271,8 @@ pub(crate) fn get_property_internal<T>(
         AudioObjectGetPropertyData(
             id,
             &address,
-            0,
-            null(),
+            q_len,
+            q_data,
             &mut size,
             buffer.as_mut_ptr() as *mut c_void,
         ).check()?;
@@ -277,6 +285,7 @@ fn set_property_internal<V, D, A, L>(
     id: AudioObjectID,
     property: Property<V, D, A, L>,
     value: V,
+    qualifier: Option<&[u8]>,
 ) -> Result<(), CoreAudioError> {
     unsafe {
         let out_data;
@@ -286,12 +295,19 @@ fn set_property_internal<V, D, A, L>(
             return Err(CoreAudioError::from(kAudioHardwareUnsupportedOperationError as i32));
         }
 
+        let (q_len, q_data) = qualifier.map_or(
+            (0, null()),
+            |q| {
+                (q.len() as u32, q.as_ptr() as *const c_void)
+            }
+        );
+
         let size = out_data.len() as u32;
         AudioObjectSetPropertyData(
             id,
             &property.address,
-            0,
-            null(),
+            q_len,
+            q_data,
             size,
             out_data.as_ptr() as *const c_void,
         ).check()?;

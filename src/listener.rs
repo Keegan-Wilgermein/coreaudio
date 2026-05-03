@@ -120,7 +120,7 @@ unsafe extern "C" fn io_callback<T>(
         &*(client_data as *mut ClientCallbackData<T>)
     };
 
-    let data = match get_property_internal(device_id, unsafe { *address }, client_data.read) {
+    let data = match get_property_internal(device_id, unsafe { *address }, client_data.read, None) {
         Ok(data) => data,
         Err(error) => return error.code(),
     };
