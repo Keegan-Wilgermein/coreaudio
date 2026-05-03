@@ -1,7 +1,7 @@
 //! # Objects
 
 // ---- Imports ------------
-use crate::{data_types::Scope, errors::{CoreAudioError, OSStatusCheck}, property::{Listenable, Property, ReadWrite}};
+use crate::{data_types::Scope, errors::{CoreAudioError, OSStatusCheck}, property::{DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Listenable, Property, ReadWrite, SYSTEM_DEFAULT_INPUT, SYSTEM_DEVICES}};
 
 use std::{ffi::c_void, marker::PhantomData, ptr::null};
 use coreaudio_sys::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectSetPropertyData, kAudioHardwareUnsupportedOperationError, kAudioObjectSystemObject};
@@ -33,6 +33,24 @@ impl Default for AudioObject<System> {
     }
 }
 
+impl From<u32> for AudioObject<Device> {
+    fn from(value: u32) -> Self {
+        Self {
+            id: value,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl From<u32> for AudioObject<Stream> {
+    fn from(value: u32) -> Self {
+        Self {
+            id: value,
+            _marker: PhantomData,
+        }
+    }
+}
+
 impl<T> AudioObject<T> {
     /// Returns the objects ID
     pub fn id(&self) -> u32 {
@@ -44,19 +62,39 @@ impl AudioObject<System> {
     /// Gets all avaliable devices regardless of scope
     pub fn devices(&self) ->
     Result<Vec<AudioObject<Device>>, CoreAudioError> {
-        todo!()
+        Ok(
+            get_property_internal(self.id, SYSTEM_DEVICES)?
+            .iter()
+            .map(|id| {
+                AudioObject::<Device>::from(*id)
+            }).collect()
+        )
     }
 
     /// Gets all avaliable devices with scope
     pub fn devices_with_scope(&self, scope: Scope) ->
     Result<Vec<AudioObject<Device>>, CoreAudioError> {
-        todo!()
+        let all_devices = self.devices()?;
+    
+        Ok(all_devices.into_iter().filter(|device| {
+            let streams = match scope {
+                Scope::Input => device.get_property(DEVICE_INPUT_STREAMS),
+                Scope::Output => device.get_property(DEVICE_OUTPUT_STREAMS),
+            };
+            
+            streams.map(|s: Vec<AudioObjectID>| !s.is_empty()).unwrap_or(false)
+        }).collect())
     }
 
     /// Gets the current device with scope
     pub fn current_device(&self, scope: Scope) ->
     Result<AudioObject<Device>, CoreAudioError> {
-        todo!()
+        let id = match scope {
+            Scope::Input => self.get_property(SYSTEM_DEFAULT_INPUT)?,
+            Scope::Output => self.get_property(SYSTEM_DEFAULT_INPUT)?,
+        };
+
+        Ok(AudioObject::<Device>::from(id))
     }
 
     /// Gets the value of an objects property
@@ -89,13 +127,32 @@ impl AudioObject<Device> {
     /// Gets all avaliable streams regardless of scope
     pub fn streams(&self) ->
     Result<Vec<AudioObject<Stream>>, CoreAudioError> {
-        todo!()
+        let mut streams = self.get_property(DEVICE_INPUT_STREAMS)?;
+        let output_streams = self.get_property(DEVICE_OUTPUT_STREAMS)?;
+        output_streams.iter().for_each(|stream| {
+            streams.push(*stream);
+        });
+
+        Ok(
+            streams.iter().map(|stream| {
+                AudioObject::<Stream>::from(*stream)
+            }).collect()
+        )
     }
 
     /// Gets all avaliable streams with scope
     pub fn streams_with_scope(&self, scope: Scope) ->
     Result<Vec<AudioObject<Stream>>, CoreAudioError> {
-        todo!()
+        let streams = match scope {
+            Scope::Input => self.get_property(DEVICE_INPUT_STREAMS)?,
+            Scope::Output => self.get_property(DEVICE_OUTPUT_STREAMS)?,
+        };
+
+        Ok(
+            streams.iter().map(|stream| {
+                AudioObject::<Stream>::from(*stream)
+            }).collect()
+        )
     }
 
     /// Gets the value of an objects property

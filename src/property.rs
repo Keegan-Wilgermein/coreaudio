@@ -270,6 +270,8 @@ pub const DEVICE_NAME: Property<String, Device, ReadOnly, Silent> =
     );
 
 /// Persistent unique identifier for the device
+/// 
+/// Not the same as the device id
 pub const DEVICE_UID: Property<String, Device, ReadOnly, Silent> =
     Property::new(
         address(
