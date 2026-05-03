@@ -20,33 +20,66 @@ use coreaudio_sys::{
 
 // ---- Constants ------------
 #[allow(non_upper_case_globals)]
+/// Identifier for an unsupported format error from coreaudio
+/// 
 /// Code for '!dat'
 const kAudioHardwareUnsupportedFormatError: u32 = 0x21646174;
 
 #[allow(non_upper_case_globals)]
+/// Identifier for insufficient permissions to access
+/// a device - such as if another process is hogging it
+/// 
 /// Code for '!hog'
 const kAudioHardwarePermissionsError: u32 = 0x21686F67;
 
 // ---- Enums ------------
 #[derive(Debug, Clone, Copy)]
+/// Wrappers for codes returned by coreaudio
 pub enum ErrorKind {
+    /// HAL not running -
+    /// typically due to there being no active devices avaliable
     NotRunning,
+    /// Something ambiguous with no extra detail
     Unspecified,
+    /// The requested property doesn't exist for this object
     UnknownProperty,
+    /// Incorrect buffer size provided for property
     BadPropertySize,
+    /// Operation not permitted on this object
+    /// or in this scenario
     IllegalOperation,
+    /// Invalid object ID
     BadObject,
+    /// Invalid device ID
     BadDevice,
+    /// Invalid stream ID
     BadStream,
+    /// Object doesn't support this operation
     UnsupportedOperation,
+    /// The device isn't ready to be used
+    /// 
+    /// There is no way to know when it will be ready
     NotReady,
+    /// The requested format is not supported by the device
     UnsupportedFormat,
+    /// Object can't be accessed due
+    /// to another process having exclusive access
     Permissions,
+    /// Unrecognised error codes
+    /// 
+    /// Check the `code` field in `CoreAudioError`
+    /// for more info
     Unknown,
 }
 
 // ---- Structs ------------
 #[derive(Debug)]
+/// Error information
+/// 
+/// `kind` contains an `ErrorKind` to be matched against
+/// 
+/// `code` contains an `OSStatus` for the exact code
+/// incase the error was unrecognised
 pub struct CoreAudioError {
     kind: ErrorKind,
     code: OSStatus,
@@ -90,14 +123,17 @@ impl From<OSStatus> for CoreAudioError {
 }
 
 impl CoreAudioError {
+    /// Returns the contained `ErrorKind` value
     pub fn kind(&self) -> ErrorKind {
         self.kind
     }
 
+    /// Returns the contained `OSStatus` as an `i32`
     pub fn code(&self) -> i32 {
         self.code
     }
 
+    /// Returns both the `ErrorKind` and `OSStatus` values
     pub fn as_tuple(&self) -> (ErrorKind, i32) {
         (
             self.kind,
@@ -105,6 +141,7 @@ impl CoreAudioError {
         )
     }
 
+    /// Returns the four character code that the contained `OSStatus` represents
     pub fn stringify_code(&self) -> String {
         self.code.stringify_bytes()
     }
@@ -116,6 +153,10 @@ pub trait OSStatusCheck {
 }
 
 impl OSStatusCheck for OSStatus {
+    /// Matches an `OSStatus` and returns an
+    /// `OK(())` if `0`
+    /// or a
+    /// `Err(CoreAudioError)` if anything else
     fn check(self) -> Result<(), CoreAudioError> {
         match self {
             0 => Ok(()),
@@ -129,6 +170,7 @@ pub trait OSStatusStringify {
 }
 
 impl OSStatusStringify for OSStatus {
+    /// Returns a `String` representation of an `OSStatus`
     fn stringify_bytes(self) -> String {
         let bytes = &self.to_be_bytes();
         String::from_utf8_lossy(bytes).into_owned()
