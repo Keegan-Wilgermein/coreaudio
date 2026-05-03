@@ -36,6 +36,7 @@ const kAudioHardwarePermissionsError: u32 = 0x21686F67;
 #[derive(Debug, Clone, Copy)]
 /// Wrappers for codes returned by coreaudio
 pub enum ErrorKind {
+    // ---- CoreAudioErrors ------------
     /// HAL not running -
     /// typically due to there being no active devices avaliable
     NotRunning,
@@ -70,6 +71,16 @@ pub enum ErrorKind {
     /// Check the `code` field in `CoreAudioError`
     /// for more info
     Unknown,
+
+    // ---- Other errors ------------
+    CFStringConversion,
+    BoolConversion,
+    F64Conversion,
+    I32Conversion,
+    U32Conversion,
+    AudioObjectIdConversion,
+    StreamDescriptionConversion,
+    ValueRangeConversion,
 }
 
 // ---- Structs ------------
@@ -81,7 +92,9 @@ pub enum ErrorKind {
 /// `code` contains an `OSStatus` for the exact code
 /// incase the error was unrecognised
 pub struct CoreAudioError {
+    /// The error kind
     kind: ErrorKind,
+    /// The error code
     code: OSStatus,
 }
 
@@ -123,6 +136,13 @@ impl From<OSStatus> for CoreAudioError {
 }
 
 impl CoreAudioError {
+    pub(crate) fn from_error_kind(kind: ErrorKind) -> Self {
+        Self {
+            kind,
+            code: -1,
+        }
+    }
+
     /// Returns the contained `ErrorKind` value
     pub fn kind(&self) -> ErrorKind {
         self.kind
@@ -148,7 +168,7 @@ impl CoreAudioError {
 }
 
 // ---- Traits ------------
-pub trait OSStatusCheck {
+pub(crate) trait OSStatusCheck {
     fn check(self) -> Result<(), CoreAudioError>;
 }
 
@@ -165,7 +185,7 @@ impl OSStatusCheck for OSStatus {
     }
 }
 
-pub trait OSStatusStringify {
+pub(crate) trait OSStatusStringify {
     fn stringify_bytes(self) -> String;
 }
 
