@@ -1,7 +1,7 @@
 //! # Objects
 
 // ---- Imports ------------
-use crate::{data_types::Scope, errors::{CoreAudioError, OSStatusCheck}, listener::PropertyListener, property::{DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Listenable, Property, ReadWrite, SYSTEM_DEFAULT_INPUT, SYSTEM_DEVICES}};
+use crate::{data_types::Scope, errors::{CoreAudioError, OSStatusCheck}, io_proc::{self, AudioBuffer, IOProc}, listener::PropertyListener, property::{DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Listenable, Property, ReadWrite, SYSTEM_DEFAULT_INPUT, SYSTEM_DEVICES}};
 
 use std::{ffi::c_void, marker::PhantomData, ptr::null};
 use coreaudio_sys::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectPropertyAddress, AudioObjectSetPropertyData, kAudioHardwareUnsupportedOperationError, kAudioObjectSystemObject};
@@ -178,6 +178,16 @@ impl AudioObject<Device> {
         property: Property<V, Device, A, Listenable>,
     ) -> Result<PropertyListener<V>, CoreAudioError> {
         add_listener_internal(self.id, property)
+    }
+
+    pub fn add_io_proc<F>(
+        &self,
+        callback: F,
+    ) -> Result<IOProc, CoreAudioError>
+    where
+        F: Fn(&mut [AudioBuffer]) + Send + 'static,
+    {
+        IOProc::try_new(&self, callback)
     }
 }
 
