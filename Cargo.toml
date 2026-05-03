@@ -1,9 +1,10 @@
 [package]
 name = "coreaudio"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "A safe and simple wrapper around the CoreAudio HAL"
 license = "MIT"
+documentation = "https://docs.rs/coreaudio"
 repository = "https://github.com/Keegan-Wilgermein/coreaudio"
 keywords = ["coreaudio", "audio", "hal", "macos", "device"]
 categories = ["multimedia::audio", "os::macos-apis"]
@@ -12,3 +13,6 @@ categories = ["multimedia::audio", "os::macos-apis"]
 core-foundation = "0.10.1"
 coreaudio-sys = "0.2.17"
 num-traits = "0.2.19"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-apple-darwin"]
