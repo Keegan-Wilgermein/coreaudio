@@ -392,7 +392,7 @@ pub(crate) const DEVICE_OUTPUT_STREAMS: Property<Vec<AudioObjectID>, Device, Rea
         None,
     );
 
-pub const DEVICE_HOG_MODE: Property<i32, Device, ReadWrite, Silent> =
+pub const DEVICE_HOG_MODE: Property<i32, Device, ReadWrite, Listenable> =
     Property::new(
         address(
             kAudioDevicePropertyHogMode,

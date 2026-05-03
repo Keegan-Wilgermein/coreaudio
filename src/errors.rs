@@ -82,6 +82,8 @@ pub enum ErrorKind {
     AudioObjectIdConversion,
     StreamDescriptionConversion,
     ValueRangeConversion,
+    ListenerHangUp,
+    ListenerTimeOut,
 }
 
 // ---- Structs ------------
