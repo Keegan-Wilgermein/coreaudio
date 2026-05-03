@@ -3,7 +3,7 @@
 // ---- Imports ------------
 use std::ops::RangeInclusive;
 use coreaudio_sys::{
-    AudioStreamBasicDescription, kAudioFormatAC3, kAudioFormatAES3, kAudioFormatALaw, kAudioFormatAMR, kAudioFormatAMR_WB, kAudioFormatAPAC, kAudioFormatAppleLossless, kAudioFormatEnhancedAC3, kAudioFormatFlagIsBigEndian, kAudioFormatFlagIsFloat, kAudioFormatFlagIsNonInterleaved, kAudioFormatFlagIsNonMixable, kAudioFormatFlagIsPacked, kAudioFormatFlagIsSignedInteger, kAudioFormatLinearPCM, kAudioFormatMPEG4AAC, kAudioFormatMPEG4AAC_ELD, kAudioFormatMPEG4AAC_ELD_SBR, kAudioFormatMPEG4AAC_ELD_V2, kAudioFormatMPEG4AAC_HE, kAudioFormatMPEG4AAC_HE_V2, kAudioFormatMPEG4AAC_LD, kAudioFormatMPEG4AAC_Spatial, kAudioFormatMPEGLayer3, kAudioFormatOpus
+    AudioStreamBasicDescription, AudioValueRange, kAudioFormatAC3, kAudioFormatAES3, kAudioFormatALaw, kAudioFormatAMR, kAudioFormatAMR_WB, kAudioFormatAPAC, kAudioFormatAppleLossless, kAudioFormatEnhancedAC3, kAudioFormatFlagIsBigEndian, kAudioFormatFlagIsFloat, kAudioFormatFlagIsNonInterleaved, kAudioFormatFlagIsNonMixable, kAudioFormatFlagIsPacked, kAudioFormatFlagIsSignedInteger, kAudioFormatLinearPCM, kAudioFormatMPEG4AAC, kAudioFormatMPEG4AAC_ELD, kAudioFormatMPEG4AAC_ELD_SBR, kAudioFormatMPEG4AAC_ELD_V2, kAudioFormatMPEG4AAC_HE, kAudioFormatMPEG4AAC_HE_V2, kAudioFormatMPEG4AAC_LD, kAudioFormatMPEG4AAC_Spatial, kAudioFormatMPEGLayer3, kAudioFormatOpus
 };
 use num_traits::AsPrimitive;
 use crate::errors::{CoreAudioError, ErrorKind};
@@ -358,6 +358,15 @@ pub struct BufferFrameSizeRange {
     max: u32,
 }
 
+impl From<AudioValueRange> for BufferFrameSizeRange {
+    fn from(value: AudioValueRange) -> Self {
+        Self {
+            min: value.mMinimum as u32,
+            max: value.mMaximum as u32,
+        }
+    }
+}
+
 impl BufferFrameSizeRange {
     /// Returns all values between `min` and `max` that are a power of 2
     pub fn valid_sizes(&self) -> Vec<u32> {
@@ -374,6 +383,15 @@ impl BufferFrameSizeRange {
 pub struct SampleRateRange {
     min: f64,
     max: f64,
+}
+
+impl From<AudioValueRange> for SampleRateRange {
+    fn from(value: AudioValueRange) -> Self {
+        Self {
+            min: value.mMinimum,
+            max: value.mMaximum,
+        }
+    }
 }
 
 impl SampleRateRange {

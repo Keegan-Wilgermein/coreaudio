@@ -4,7 +4,7 @@
 use crate::{data_types::Scope, errors::{CoreAudioError, OSStatusCheck}, property::{Listenable, Property, ReadWrite}};
 
 use std::{ffi::c_void, marker::PhantomData, ptr::null};
-use coreaudio_sys::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectSetPropertyData, kAudioObjectSystemObject};
+use coreaudio_sys::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectSetPropertyData, kAudioHardwareUnsupportedOperationError, kAudioObjectSystemObject};
 
 // ---- Structs ------------
 /// Identifier for `AudioObject` to expose system object functions
@@ -169,14 +169,21 @@ fn set_property_internal<V, D, A, L>(
     value: V,
 ) -> Result<(), CoreAudioError> {
     unsafe {
-        let size = size_of::<V>() as u32;
+        let out_data;
+        if let Some(function) = property.encode {
+            out_data = function(value)
+        } else {
+            return Err(CoreAudioError::from(kAudioHardwareUnsupportedOperationError as i32));
+        }
+
+        let size = out_data.len() as u32;
         AudioObjectSetPropertyData(
             id,
             &property.address,
             0,
             null(),
             size,
-            &value as *const _ as *mut c_void,
+            out_data.as_ptr() as *const c_void,
         ).check()?;
 
         Ok(())

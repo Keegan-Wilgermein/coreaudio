@@ -3,6 +3,7 @@
 // ----- Imports ------------
 use crate::{data_types::{BufferFrameSizeRange, SampleRateRange, StreamDescription}, errors::{CoreAudioError, ErrorKind}, object::{Device, Stream, System}};
 use std::marker::PhantomData;
+use core_foundation::{base::TCFType, string::{CFString, CFStringRef}};
 use coreaudio_sys::{
     AudioObjectID,
     AudioObjectPropertyAddress,
@@ -83,7 +84,20 @@ impl<T, Object, Access, L> Property<T, Object, Access, L> {
 
 // ---- Read functions (private) ----
 fn read_string(bytes: &[u8]) -> Result<String, CoreAudioError> {
-    todo!("CFString conversion")
+    if bytes.len() != size_of::<CFStringRef>() {
+        return Err(CoreAudioError::from_error_kind(ErrorKind::CFStringConversion));
+    }
+
+    let ptr = usize::from_ne_bytes(bytes[..size_of::<usize>()].try_into()
+        .map_err(|_| CoreAudioError::from_error_kind(ErrorKind::CFStringConversion))?
+    ) as CFStringRef;
+
+    if ptr.is_null() {
+        return Err(CoreAudioError::from_error_kind(ErrorKind::CFStringConversion));
+    }
+
+    let cf_string = unsafe { CFString::wrap_under_get_rule(ptr) };
+    Ok(cf_string.to_string())
 }
 
 fn read_bool(bytes: &[u8]) -> Result<bool, CoreAudioError> {
@@ -142,51 +156,92 @@ fn read_audio_object_id(bytes: &[u8]) -> Result<AudioObjectID, CoreAudioError> {
 }
 
 fn read_stream_description(bytes: &[u8]) -> Result<StreamDescription, CoreAudioError> {
-    todo!("ASBD conversion")
-}
+    if bytes.len() != size_of::<AudioStreamBasicDescription>() {
+        return Err(CoreAudioError::from_error_kind(ErrorKind::StreamDescriptionConversion));
+    }
 
-fn read_sample_rate_range(bytes: &[u8]) -> Result<SampleRateRange, CoreAudioError> {
-    todo!("AudioValueRange conversion")
+    let asbd = unsafe { 
+        std::ptr::read(bytes.as_ptr() as *const AudioStreamBasicDescription) 
+    };
+    
+    StreamDescription::try_from(asbd)
+        .map_err(|_| CoreAudioError::from_error_kind(ErrorKind::StreamDescriptionConversion))
 }
 
 fn read_buffer_size_range(bytes: &[u8]) -> Result<BufferFrameSizeRange, CoreAudioError> {
-    todo!("AudioValueRange conversion")
+    if bytes.len() != size_of::<AudioValueRange>() {
+        return Err(CoreAudioError::from_error_kind(ErrorKind::ValueRangeConversion));
+    }
+
+    let range = unsafe {
+        std::ptr::read(bytes.as_ptr() as *const AudioValueRange)
+    };
+
+    Ok(BufferFrameSizeRange::from(range))
 }
 
 fn read_vec_audio_object_id(bytes: &[u8]) -> Result<Vec<AudioObjectID>, CoreAudioError> {
-    todo!("Vec<AudioObjectID> conversion")
+    if bytes.len() % size_of::<AudioObjectID>() != 0 {
+        return Err(CoreAudioError::from_error_kind(ErrorKind::AudioObjectIdConversion));
+    }
+
+    Ok(bytes.chunks(size_of::<AudioObjectID>())
+        .map(|chunk| unsafe { std::ptr::read(chunk.as_ptr() as *const AudioObjectID) })
+        .collect())
 }
 
 fn read_vec_sample_rate_range(bytes: &[u8]) -> Result<Vec<SampleRateRange>, CoreAudioError> {
-    todo!("Vec<AudioValueRange> conversion")
+    if bytes.len() % size_of::<AudioValueRange>() != 0 {
+        return Err(CoreAudioError::from_error_kind(ErrorKind::ValueRangeConversion));
+    }
+
+    Ok(bytes.chunks(size_of::<AudioValueRange>())
+        .map(|chunk| unsafe { 
+            SampleRateRange::from(std::ptr::read(chunk.as_ptr() as *const AudioValueRange)) 
+        })
+        .collect())
 }
 
 fn read_vec_buffer_size_range(bytes: &[u8]) -> Result<Vec<BufferFrameSizeRange>, CoreAudioError> {
-    todo!("Vec<AudioValueRange> conversion")
+    if bytes.len() % size_of::<AudioValueRange>() != 0 {
+        return Err(CoreAudioError::from_error_kind(ErrorKind::ValueRangeConversion));
+    }
+
+    Ok(bytes.chunks(size_of::<AudioValueRange>())
+        .map(|chunk| unsafe { 
+            BufferFrameSizeRange::from(std::ptr::read(chunk.as_ptr() as *const AudioValueRange)) 
+        })
+        .collect())
 }
 
 fn encode_f64(value: f64) -> Vec<u8> {
-    todo!()
+    value.to_ne_bytes().to_vec()
 }
 
 fn encode_u32(value: u32) -> Vec<u8> {
-    todo!()
+    value.to_ne_bytes().to_vec()
 }
 
 fn encode_i32(value: i32) -> Vec<u8> {
-    todo!()
+    value.to_ne_bytes().to_vec()
 }
 
 fn encode_bool(value: bool) -> Vec<u8> {
-    todo!()
+    encode_u32(value as u32)
 }
 
 fn encode_audio_object_id(value: AudioObjectID) -> Vec<u8> {
-    todo!()
+    encode_u32(value)
 }
 
 fn encode_stream_description(value: StreamDescription) -> Vec<u8> {
-    todo!()
+    let asbd: AudioStreamBasicDescription = value.into();
+    let size = size_of::<AudioStreamBasicDescription>();
+    let mut bytes = vec![0u8; size];
+    unsafe {
+        std::ptr::write(bytes.as_mut_ptr() as *mut AudioStreamBasicDescription, asbd);
+    }
+    bytes
 }
 
 // ---- Helper ----
