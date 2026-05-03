@@ -1,17 +1,44 @@
-//! # coreaudio-hal
-//! A safe, idiomatic Rust wrapper around the CoreAudio HAL.
+//! # coreaudio
+//!
+//! A safe, idiomatic Rust wrapper around the macOS CoreAudio Hardware Abstraction Layer (HAL).
+//!
+//! This crate models the CoreAudio object hierarchy — system, devices, and streams — as
+//! generic [`AudioObject<T>`] types, where the type parameter determines which properties
+//! and operations are available. Properties carry compile-time metadata encoding their
+//! value type, access mode (read-only vs read-write), and whether they support listeners,
+//! so invalid operations are caught at compile time rather than at runtime.
+//!
+//! ## Core concepts
+//!
+//! - **[`AudioObject<System>`]** is the entry point. Use it to enumerate devices or
+//!   query system-wide audio state.
+//! - **[`AudioObject<Device>`]** represents a single audio device. Read and write
+//!   properties like sample rate and buffer size, enumerate streams, or register
+//!   IO procs for audio rendering.
+//! - **[`AudioObject<Stream>`]** represents an individual stream on a device. Inspect
+//!   its virtual/physical format, direction, and latency.
+//! - **[`Property`] constants** (e.g. [`DEVICE_NAME`], [`DEVICE_NOMINAL_SAMPLE_RATE`])
+//!   are passed to `get_property`, `set_property`, and `add_listener`. The type system
+//!   enforces that you can only write to read-write properties and only listen to
+//!   listenable ones.
+//! - **[`PropertyListener`]** watches a property for changes, offering non-blocking,
+//!   blocking, and timeout-based polling.
+//! - **[`IOProc`]** wraps a CoreAudio I/O procedure, letting you register an audio
+//!   render callback and control playback.
 //!
 //! ## Quick start
-//! ```rust
-//! use coreaudio_hal::{AudioObject, System, Scope};
+//!
+//! ```rust,no_run
+//! use coreaudio::{AudioObject, System, Scope, DEVICE_NAME};
 //!
 //! let system = AudioObject::<System>::default();
-//! let devices = system.devices()?;
+//! let devices = system.devices_with_scope(Scope::Output)?;
 //!
-//! for device in devices {
-//!     let name = device.get_property(coreaudio_hal::DEVICE_NAME)?;
+//! for device in &devices {
+//!     let name: String = device.get_property(DEVICE_NAME)?;
 //!     println!("{}", name);
 //! }
+//! # Ok::<(), coreaudio::CoreAudioError>(())
 //! ```
 
 #![cfg(target_os = "macos")]
