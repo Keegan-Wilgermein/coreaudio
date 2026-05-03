@@ -3,46 +3,11 @@
 #![allow(unsafe_code)]
 
 // ----- Imports ------------
-use crate::{data_types::{BufferFrameSizeRange, SampleRateRange, StreamDescription}, errors::{CoreAudioError, ErrorKind}, object::{Device, Stream, System}};
+use crate::{data_types::{BufferFrameSizeRange, SampleRateRange, StreamDescription, StreamRangedDescription}, errors::{CoreAudioError, ErrorKind}, object::{Device, Stream, System}};
 use std::marker::PhantomData;
 use core_foundation::{base::TCFType, string::{CFString, CFStringRef}};
 use coreaudio_sys::{
-    AudioObjectID,
-    AudioObjectPropertyAddress,
-    AudioObjectPropertyScope,
-    AudioObjectPropertySelector,
-    AudioStreamBasicDescription,
-    AudioValueRange,
-    kAudioDevicePropertyAvailableNominalSampleRates,
-    kAudioDevicePropertyBufferFrameSize,
-    kAudioDevicePropertyBufferFrameSizeRange,
-    kAudioDevicePropertyDeviceIsAlive,
-    kAudioDevicePropertyDeviceIsRunning,
-    kAudioDevicePropertyDeviceUID,
-    kAudioDevicePropertyLatency,
-    kAudioDevicePropertyNominalSampleRate,
-    kAudioDevicePropertyStreams,
-    kAudioDevicePropertyHogMode,
-    kAudioHardwarePropertyBoxList,
-    kAudioHardwarePropertyClockDeviceList,
-    kAudioHardwarePropertyDefaultInputDevice,
-    kAudioHardwarePropertyDefaultOutputDevice,
-    kAudioHardwarePropertyDevices,
-    kAudioHardwarePropertyIsInitingOrExiting,
-    kAudioHardwarePropertyPlugInList,
-    kAudioHardwarePropertyPowerHint,
-    kAudioHardwarePropertySleepingIsAllowed,
-    kAudioHardwarePropertyTapList,
-    kAudioObjectPropertyElementMain,
-    kAudioObjectPropertyName,
-    kAudioObjectPropertyScopeGlobal,
-    kAudioObjectPropertyScopeInput,
-    kAudioObjectPropertyScopeOutput,
-    kAudioStreamPropertyDirection,
-    kAudioStreamPropertyIsActive,
-    kAudioStreamPropertyLatency,
-    kAudioStreamPropertyPhysicalFormat,
-    kAudioStreamPropertyVirtualFormat,
+    AudioObjectID, AudioObjectPropertyAddress, AudioObjectPropertyScope, AudioObjectPropertySelector, AudioStreamBasicDescription, AudioStreamRangedDescription, AudioValueRange, kAudioDevicePropertyAvailableNominalSampleRates, kAudioDevicePropertyBufferFrameSize, kAudioDevicePropertyBufferFrameSizeRange, kAudioDevicePropertyDeviceIsAlive, kAudioDevicePropertyDeviceIsRunning, kAudioDevicePropertyDeviceUID, kAudioDevicePropertyHogMode, kAudioDevicePropertyLatency, kAudioDevicePropertyNominalSampleRate, kAudioDevicePropertyStreams, kAudioHardwarePropertyBoxList, kAudioHardwarePropertyClockDeviceList, kAudioHardwarePropertyDefaultInputDevice, kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDevices, kAudioHardwarePropertyIsInitingOrExiting, kAudioHardwarePropertyPlugInList, kAudioHardwarePropertyPowerHint, kAudioHardwarePropertySleepingIsAllowed, kAudioHardwarePropertyTapList, kAudioObjectPropertyElementMain, kAudioObjectPropertyName, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyScopeInput, kAudioObjectPropertyScopeOutput, kAudioStreamPropertyAvailablePhysicalFormats, kAudioStreamPropertyAvailableVirtualFormats, kAudioStreamPropertyDirection, kAudioStreamPropertyIsActive, kAudioStreamPropertyLatency, kAudioStreamPropertyPhysicalFormat, kAudioStreamPropertyStartingChannel, kAudioStreamPropertyTerminalType, kAudioStreamPropertyVirtualFormat
 };
 
 // ---- Structs -------------
@@ -202,6 +167,20 @@ fn read_vec_sample_rate_range(bytes: &[u8]) -> Result<Vec<SampleRateRange>, Core
             SampleRateRange::from(std::ptr::read(chunk.as_ptr() as *const AudioValueRange)) 
         })
         .collect())
+}
+
+fn read_vec_stream_ranged_description(bytes: &[u8]) -> Result<Vec<StreamRangedDescription>, CoreAudioError> {
+    if bytes.len() % size_of::<AudioStreamRangedDescription>() != 0 {
+        return Err(CoreAudioError::from_error_kind(ErrorKind::StreamDescriptionConversion));
+    }
+
+    Ok(bytes.chunks(size_of::<AudioStreamRangedDescription>())
+    .map(|chunk| unsafe {
+        StreamRangedDescription::from(
+            std::ptr::read(chunk.as_ptr() as *const AudioStreamRangedDescription)
+        )
+    })
+    .collect())
 }
 
 fn encode_f64(value: f64) -> Vec<u8> {
@@ -447,6 +426,50 @@ Property::new(
     ),
     read_stream_description,
     Some(encode_stream_description)
+);
+
+/// The device the stream is outputting through
+pub const TERMINAL_TYPE: Property<u32, Stream, ReadOnly, Silent> =
+Property::new(
+    address(
+        kAudioStreamPropertyTerminalType,
+        kAudioObjectPropertyScopeGlobal,
+    ),
+    read_u32,
+    None,
+);
+
+/// The first element of the stream that maps to element 1
+pub const STARTING_CHANNEL: Property<u32, Stream, ReadOnly, Silent> =
+Property::new(
+    address(
+        kAudioStreamPropertyStartingChannel,
+        kAudioObjectPropertyScopeGlobal,
+    ),
+    read_u32,
+    None,
+);
+
+/// All data formats the stream can present to clients, each with a sample rate range
+pub(crate) const STREAM_AVAILABLE_VIRTUAL_FORMATS: Property<Vec<StreamRangedDescription>, Stream, ReadOnly, Silent> =
+Property::new(
+    address(
+        kAudioStreamPropertyAvailableVirtualFormats,
+        kAudioObjectPropertyScopeGlobal
+    ),
+    read_vec_stream_ranged_description,
+    None,
+);
+
+/// All data formats the hardware actually supports, each with a sample rate range
+pub(crate) const STREAM_AVAILABLE_PHYSICAL_FORMATS: Property<Vec<StreamRangedDescription>, Stream, ReadOnly, Silent> =
+Property::new(
+    address(
+        kAudioStreamPropertyAvailablePhysicalFormats,
+        kAudioObjectPropertyScopeGlobal
+    ),
+    read_vec_stream_ranged_description,
+    None,
 );
 
 /// Latency of the stream in frames

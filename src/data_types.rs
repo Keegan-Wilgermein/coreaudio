@@ -5,7 +5,7 @@
 // ---- Imports ------------
 use std::ops::RangeInclusive;
 use coreaudio_sys::{
-    AudioStreamBasicDescription, AudioValueRange, kAudioFormatAC3, kAudioFormatAES3, kAudioFormatALaw, kAudioFormatAMR, kAudioFormatAMR_WB, kAudioFormatAPAC, kAudioFormatAppleLossless, kAudioFormatEnhancedAC3, kAudioFormatFlagIsBigEndian, kAudioFormatFlagIsFloat, kAudioFormatFlagIsNonInterleaved, kAudioFormatFlagIsNonMixable, kAudioFormatFlagIsPacked, kAudioFormatFlagIsSignedInteger, kAudioFormatLinearPCM, kAudioFormatMPEG4AAC, kAudioFormatMPEG4AAC_ELD, kAudioFormatMPEG4AAC_ELD_SBR, kAudioFormatMPEG4AAC_ELD_V2, kAudioFormatMPEG4AAC_HE, kAudioFormatMPEG4AAC_HE_V2, kAudioFormatMPEG4AAC_LD, kAudioFormatMPEG4AAC_Spatial, kAudioFormatMPEGLayer3, kAudioFormatOpus
+    AudioStreamBasicDescription, AudioStreamRangedDescription, AudioValueRange, kAudioFormatAC3, kAudioFormatAES3, kAudioFormatALaw, kAudioFormatAMR, kAudioFormatAMR_WB, kAudioFormatAPAC, kAudioFormatAppleLossless, kAudioFormatEnhancedAC3, kAudioFormatFlagIsBigEndian, kAudioFormatFlagIsFloat, kAudioFormatFlagIsNonInterleaved, kAudioFormatFlagIsNonMixable, kAudioFormatFlagIsPacked, kAudioFormatFlagIsSignedInteger, kAudioFormatLinearPCM, kAudioFormatMPEG4AAC, kAudioFormatMPEG4AAC_ELD, kAudioFormatMPEG4AAC_ELD_SBR, kAudioFormatMPEG4AAC_ELD_V2, kAudioFormatMPEG4AAC_HE, kAudioFormatMPEG4AAC_HE_V2, kAudioFormatMPEG4AAC_LD, kAudioFormatMPEG4AAC_Spatial, kAudioFormatMPEGLayer3, kAudioFormatOpus
 };
 use num_traits::AsPrimitive;
 use crate::errors::{CoreAudioError, ErrorKind};
@@ -264,6 +264,7 @@ impl FormatFlags {
 }
 
 /// Audio stream description
+#[derive(Clone, Copy)]
 pub struct StreamDescription {
     sample_rate: f64,
     format_id: FormatId,
@@ -376,6 +377,31 @@ impl BufferFrameSizeRange {
     }
 }
 
+pub struct StreamRangedDescription {
+    stream_description: StreamDescription,
+    sample_rate_range: SampleRateRange,
+}
+
+impl From<AudioStreamRangedDescription> for StreamRangedDescription {
+    fn from(value: AudioStreamRangedDescription) -> Self {
+        Self {
+            stream_description: value.mFormat.into(),
+            sample_rate_range: value.mSampleRateRange.into(),
+        }
+    }
+}
+
+impl StreamRangedDescription {
+    pub fn stream_description(&self) -> StreamDescription {
+        self.stream_description
+    }
+
+    pub fn sample_rate_range(&self) -> SampleRateRange {
+        self.sample_rate_range
+    }
+}
+
+#[derive(Clone, Copy)]
 pub struct SampleRateRange {
     min: f64,
     max: f64,
