@@ -82,8 +82,14 @@ pub enum ErrorKind {
     AudioObjectIdConversion,
     StreamDescriptionConversion,
     ValueRangeConversion,
+
+    // ---- Listener errors ------------
     ListenerHangUp,
     ListenerTimeOut,
+    
+    // ---- IO Proc errors ------------
+    AlreadyRunning,
+    AlreadyPaused,
 }
 
 // ---- Structs ------------
