@@ -2,6 +2,11 @@
 name = "coreaudio"
 version = "0.1.0"
 edition = "2024"
+description = "A safe and simple wrapper around the CoreAudio HAL"
+license = "MIT"
+repository = "https://github.com/Keegan-Wilgermein/coreaudio"
+keywords = ["coreaudio", "audio", "hal", "macos", "device"]
+categories = ["multimedia::audio", "os::macos-apis"]
 
 [dependencies]
 core-foundation = "0.10.1"

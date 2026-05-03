@@ -1,5 +1,7 @@
 //! # Listeners
 
+#![allow(unsafe_code)]
+
 // ---- Imports --------
 use std::{ffi::c_void, sync::mpsc::{self, Receiver, RecvTimeoutError, Sender}, time::Duration};
 use coreaudio_sys::{AudioObjectAddPropertyListener, AudioObjectID, AudioObjectPropertyAddress, AudioObjectRemovePropertyListener, OSStatus};

@@ -1,20 +1,22 @@
 //! # Objects
 
+#![allow(unsafe_code)]
+
 // ---- Imports ------------
-use crate::{data_types::Scope, errors::{CoreAudioError, OSStatusCheck}, io_proc::{self, AudioBuffer, IOProc}, listener::PropertyListener, property::{DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Listenable, Property, ReadWrite, SYSTEM_DEFAULT_INPUT, SYSTEM_DEVICES}};
+use crate::{data_types::{BufferFrameSizeRange, SampleRateRange, Scope, StreamDescription}, errors::{CoreAudioError, OSStatusCheck}, io_proc::{AudioBuffer, IOProc}, listener::PropertyListener, property::{DEVICE_AVAILABLE_SAMPLE_RATES, DEVICE_BUFFER_FRAME_SIZE_RANGE, DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Listenable, Property, ReadWrite, STREAM_PHYSICAL_FORMAT, STREAM_VIRTUAL_FORMAT, SYSTEM_BOX_LIST, SYSTEM_CLOCK_DEVICE_LIST, SYSTEM_DEFAULT_INPUT, SYSTEM_DEFAULT_OUTPUT, SYSTEM_DEVICES, SYSTEM_PLUGIN_LIST, SYSTEM_TAP_LIST}};
 
 use std::{ffi::c_void, marker::PhantomData, ptr::null};
 use coreaudio_sys::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectPropertyAddress, AudioObjectSetPropertyData, kAudioHardwareUnsupportedOperationError, kAudioObjectSystemObject};
 
 // ---- Structs ------------
 /// Identifier for `AudioObject` to expose system object functions
-pub(crate) struct System;
+pub struct System;
 
 /// Identifier for `AudioObject` to expose device object functions
-pub(crate) struct Device;
+pub struct Device;
 
 /// Identifier for `AudioObject` to expose stream object functions
-pub(crate) struct Stream;
+pub struct Stream;
 
 /// Describes an object in use by CoreAudio
 /// and exposes specific functions for different variants
@@ -91,10 +93,26 @@ impl AudioObject<System> {
     Result<AudioObject<Device>, CoreAudioError> {
         let id = match scope {
             Scope::Input => self.get_property(SYSTEM_DEFAULT_INPUT)?,
-            Scope::Output => self.get_property(SYSTEM_DEFAULT_INPUT)?,
+            Scope::Output => self.get_property(SYSTEM_DEFAULT_OUTPUT)?,
         };
 
         Ok(AudioObject::<Device>::from(id))
+    }
+
+    pub fn system_box_list(&self) -> Result<Vec<AudioObjectID>, CoreAudioError> {
+        get_property_internal(self.id, SYSTEM_BOX_LIST.address, SYSTEM_BOX_LIST.read)
+    }
+
+    pub fn system_clock_device_list(&self) -> Result<Vec<AudioObjectID>, CoreAudioError> {
+        get_property_internal(self.id, SYSTEM_CLOCK_DEVICE_LIST.address, SYSTEM_CLOCK_DEVICE_LIST.read)
+    }
+
+    pub fn system_plugin_list(&self) -> Result<Vec<AudioObjectID>, CoreAudioError> {
+        get_property_internal(self.id, SYSTEM_PLUGIN_LIST.address, SYSTEM_PLUGIN_LIST.read)
+    }
+
+    pub fn system_tap_list(&self) -> Result<Vec<AudioObjectID>, CoreAudioError> {
+        get_property_internal(self.id, SYSTEM_TAP_LIST.address, SYSTEM_TAP_LIST.read)
     }
 
     /// Gets the value of an objects property
@@ -155,6 +173,14 @@ impl AudioObject<Device> {
         )
     }
 
+    pub fn avaliable_sample_rates(&self) -> Result<Vec<SampleRateRange>, CoreAudioError> {
+        get_property_internal(self.id, DEVICE_AVAILABLE_SAMPLE_RATES.address, DEVICE_AVAILABLE_SAMPLE_RATES.read)
+    }
+
+    pub fn avaliable_buffer_sizes(&self) -> Result<BufferFrameSizeRange, CoreAudioError> {
+        get_property_internal(self.id, DEVICE_BUFFER_FRAME_SIZE_RANGE.address, DEVICE_BUFFER_FRAME_SIZE_RANGE.read)
+    }
+
     /// Gets the value of an objects property
     pub fn get_property<V, A, L>(
         &self,
@@ -192,6 +218,14 @@ impl AudioObject<Device> {
 }
 
 impl AudioObject<Stream> {
+    pub fn stream_virtual_format(&self) -> Result<StreamDescription, CoreAudioError> {
+        get_property_internal(self.id, STREAM_VIRTUAL_FORMAT.address, STREAM_VIRTUAL_FORMAT.read)
+    }
+
+    pub fn stream_physical_format(&self) -> Result<StreamDescription, CoreAudioError> {
+        get_property_internal(self.id, STREAM_PHYSICAL_FORMAT.address, STREAM_PHYSICAL_FORMAT.read)
+    }
+
     /// Gets the value of an streams property
     pub fn get_property<V, A, L>(
         &self,

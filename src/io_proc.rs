@@ -1,5 +1,7 @@
 //! # IO Proc
 
+#![allow(unsafe_code)]
+
 // ---- Imports ------------
 use std::{ffi::c_void};
 use coreaudio_sys::{self, AudioBufferList, AudioDeviceCreateIOProcID, AudioDeviceDestroyIOProcID, AudioDeviceID, AudioDeviceIOProcID, AudioDeviceStart, AudioDeviceStop, AudioTimeStamp, OSStatus};

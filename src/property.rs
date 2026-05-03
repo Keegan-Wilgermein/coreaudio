@@ -1,5 +1,7 @@
 //! # Properties
 
+#![allow(unsafe_code)]
+
 // ----- Imports ------------
 use crate::{data_types::{BufferFrameSizeRange, SampleRateRange, StreamDescription}, errors::{CoreAudioError, ErrorKind}, object::{Device, Stream, System}};
 use std::marker::PhantomData;
@@ -45,16 +47,16 @@ use coreaudio_sys::{
 
 // ---- Structs -------------
 /// Indicates a property to be read only
-pub(crate) struct ReadOnly;
+pub struct ReadOnly;
 
 /// Indicates a property to be readable and writeable
-pub(crate) struct ReadWrite;
+pub struct ReadWrite;
 
 /// Indicates a property to be listenable
-pub(crate) struct Listenable;
+pub struct Listenable;
 
 /// Indicates a property to be unlistenable
-pub(crate) struct Silent;
+pub struct Silent;
 
 pub struct Property<T, Object, Access, L> {
     pub(crate) address: AudioObjectPropertyAddress,
@@ -198,18 +200,6 @@ fn read_vec_sample_rate_range(bytes: &[u8]) -> Result<Vec<SampleRateRange>, Core
     Ok(bytes.chunks(size_of::<AudioValueRange>())
         .map(|chunk| unsafe { 
             SampleRateRange::from(std::ptr::read(chunk.as_ptr() as *const AudioValueRange)) 
-        })
-        .collect())
-}
-
-fn read_vec_buffer_size_range(bytes: &[u8]) -> Result<Vec<BufferFrameSizeRange>, CoreAudioError> {
-    if bytes.len() % size_of::<AudioValueRange>() != 0 {
-        return Err(CoreAudioError::from_error_kind(ErrorKind::ValueRangeConversion));
-    }
-
-    Ok(bytes.chunks(size_of::<AudioValueRange>())
-        .map(|chunk| unsafe { 
-            BufferFrameSizeRange::from(std::ptr::read(chunk.as_ptr() as *const AudioValueRange)) 
         })
         .collect())
 }

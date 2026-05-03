@@ -1,5 +1,7 @@
 //! # Data types
 
+#![forbid(unsafe_code)]
+
 // ---- Imports ------------
 use std::ops::RangeInclusive;
 use coreaudio_sys::{
@@ -38,12 +40,6 @@ pub enum SampleEncoding {
     Float,
     SignedInt,
     UnSignedInt,
-}
-
-impl SampleEncoding {
-    fn from() -> Self {
-        Self::Float
-    }
 }
 
 #[derive(Debug, Clone, Copy)]

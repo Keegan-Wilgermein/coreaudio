@@ -2,6 +2,8 @@
 //! A collection of errors that can occur along with conversions between `OSStatus`
 //! and `ErrorKind`
 
+#![forbid(unsafe_code)]
+
 // ---- Imports ------------
 use std::{error::Error, fmt::Display};
 use coreaudio_sys::{
