@@ -78,6 +78,7 @@ pub enum ErrorKind {
     F64Conversion,
     I32Conversion,
     U32Conversion,
+    ScopeConversion,
     AudioObjectIdConversion,
     StreamDescriptionConversion,
     ValueRangeConversion,
