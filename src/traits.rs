@@ -9,7 +9,7 @@ use crate::{Device, Global, Property, Stream, System, property::{Listenable, Nee
     label = "Use this with `AudioObject<{Self}>` instead",
 )]
 /// Checks property compatibility with `AudioObject<T>`
-pub(crate) trait ObjectCompatibleWith<T> {}
+pub trait ObjectCompatibleWith<T> {}
 
 impl ObjectCompatibleWith<System> for System {}
 impl ObjectCompatibleWith<Device> for Device {}
@@ -36,12 +36,6 @@ impl Writeable for ReadWrite {}
 pub(crate) trait CanListen {}
 
 impl CanListen for Listenable {}
-
-
-
-
-
-
 
 #[diagnostic::on_unimplemented(
     message = "this property requires additional data before it can be used",

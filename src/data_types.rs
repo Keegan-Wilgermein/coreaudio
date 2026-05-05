@@ -264,7 +264,7 @@ impl FormatFlags {
 }
 
 /// Audio stream description
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct StreamDescription {
     sample_rate: f64,
     format_id: FormatId,
@@ -350,6 +350,7 @@ impl StreamDescription {
 }
 
 /// A range of sizes supported by a device to be used as a buffer size
+#[derive(Debug)]
 pub struct BufferFrameSizeRange {
     min: u32,
     max: u32,
@@ -377,6 +378,7 @@ impl BufferFrameSizeRange {
     }
 }
 
+#[derive(Debug)]
 pub struct StreamRangedDescription {
     stream_description: StreamDescription,
     sample_rate_range: SampleRateRange,
@@ -401,7 +403,7 @@ impl StreamRangedDescription {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct SampleRateRange {
     min: f64,
     max: f64,
@@ -427,5 +429,63 @@ impl SampleRateRange {
 
     pub fn as_range(&self) -> RangeInclusive<f64> {
         self.min..=self.max
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct DBRange {
+    min: f64,
+    max: f64,
+}
+
+impl From<AudioValueRange> for DBRange {
+    fn from(value: AudioValueRange) -> Self {
+        Self {
+            min: value.mMinimum,
+            max: value.mMaximum,
+        }
+    }
+}
+
+impl DBRange {
+    pub fn min(&self) -> f64 {
+        self.min
+    }
+
+    pub fn max(&self) -> f64 {
+        self.max
+    }
+
+    pub fn as_range(&self) -> RangeInclusive<f64> {
+        self.min..=self.max
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ChannelPair {
+    left: u32,
+    right: u32,
+}
+
+impl From<[u32; 2]> for ChannelPair {
+    fn from(value: [u32; 2]) -> Self {
+        Self {
+            left: value[0],
+            right: value[1],
+        }
+    }
+}
+
+impl ChannelPair {
+    pub fn left(&self) -> u32 {
+        self.left
+    }
+
+    pub fn right(&self) -> u32 {
+        self.right
+    }
+
+    pub fn as_array(&self) -> [u32; 2] {
+        [self.left, self.right]
     }
 }
