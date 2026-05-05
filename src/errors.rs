@@ -84,6 +84,8 @@ pub enum ErrorKind {
     AudioObjectIdConversion,
     StreamDescriptionConversion,
     ValueRangeConversion,
+    PowerHintConversion,
+    HogModeConversion,
 
     // ---- Listener errors ------------
     ListenerHangUp,

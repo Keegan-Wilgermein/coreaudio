@@ -43,6 +43,57 @@ pub enum SampleEncoding {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub enum HogMode {
+    Released,
+    Owned(i32),
+}
+
+impl From<i32> for HogMode {
+    fn from(value: i32) -> Self {
+        match value {
+            -1 => Self::Released,
+            pid => Self::Owned(pid),
+        }
+    }
+}
+
+impl Into<i32> for HogMode {
+    fn into(self) -> i32 {
+        match self {
+            Self::Released => -1,
+            Self::Owned(pid) => pid,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum PowerHint {
+    None,
+    PowerSaving,
+}
+
+impl TryFrom<u32> for PowerHint {
+    type Error = CoreAudioError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::None),
+            1 => Ok(Self::PowerSaving),
+            _ => Err(CoreAudioError::from_error_kind(ErrorKind::PowerHintConversion)),
+        }
+    }
+}
+
+impl Into<u32> for PowerHint {
+    fn into(self) -> u32 {
+        match self {
+            Self::None => 0,
+            Self::PowerSaving => 1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum SampleFormat {
 // Unsigned
     U8,

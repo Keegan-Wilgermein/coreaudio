@@ -3,7 +3,7 @@
 #![allow(unsafe_code)]
 
 // ----- Imports ------------
-use crate::{data_types::{BufferFrameSizeRange, ChannelPair, DBRange, SampleRateRange, StreamDescription, StreamRangedDescription}, errors::{CoreAudioError, ErrorKind}, object::{Device, Global, Stream, System}};
+use crate::{Scope, data_types::{BufferFrameSizeRange, ChannelPair, DBRange, HogMode, PowerHint, SampleRateRange, StreamDescription, StreamRangedDescription}, errors::{CoreAudioError, ErrorKind}, object::{Device, Global, Stream, System}};
 use std::marker::PhantomData;
 use core_foundation::{base::TCFType, string::{CFString, CFStringRef}};
 use coreaudio_sys::{
@@ -270,6 +270,40 @@ fn read_db_range(bytes: &[u8]) -> Result<DBRange, CoreAudioError> {
     }
 
     Ok(unsafe { std::ptr::read(bytes.as_ptr() as *const AudioValueRange) }.into())
+}
+
+fn read_hog_mode(bytes: &[u8]) -> Result<HogMode, CoreAudioError> {
+    if bytes.len() != size_of::<i32>() {
+        return Err(CoreAudioError::from_error_kind(ErrorKind::HogModeConversion));
+    }
+
+    Ok(unsafe { std::ptr::read(bytes.as_ptr() as *const i32) }.into())
+}
+
+fn encode_hog_mode(value: HogMode) -> Vec<u8> {
+    let num: i32 = value.into();
+    num.to_ne_bytes().to_vec()
+}
+
+fn read_scope(bytes: &[u8]) -> Result<Scope, CoreAudioError> {
+    if bytes.len() != size_of::<u32>() {
+        return Err(CoreAudioError::from_error_kind(ErrorKind::ScopeConversion));
+    }
+
+    unsafe { std::ptr::read(bytes.as_ptr() as *const u32) }.try_into()
+}
+
+fn read_power_hint(bytes: &[u8]) -> Result<PowerHint, CoreAudioError> {
+    if bytes.len() != size_of::<u32>() {
+        return Err(CoreAudioError::from_error_kind(ErrorKind::PowerHintConversion));
+    }
+
+    unsafe { std::ptr::read(bytes.as_ptr() as *const u32) }.try_into()
+}
+
+fn encode_power_hint(value: PowerHint) -> Vec<u8> {
+    let num: u32 = value.into();
+    num.to_ne_bytes().to_vec()
 }
 
 // ---- Helper ----
@@ -610,14 +644,14 @@ Property::new(
 /// Write the calling process's PID to claim hog mode (exclusive access),
 /// preventing all other clients from using the device. Write `-1` to release
 /// it. Listen to detect when another process takes or releases exclusive access.
-pub const DEVICE_HOG_MODE: Property<i32, Device, ReadWrite, Listenable, NoExtra> =
+pub const DEVICE_HOG_MODE: Property<HogMode, Device, ReadWrite, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioDevicePropertyHogMode,
         kAudioObjectPropertyScopeGlobal
     ),
-    read_i32,
-    Some(encode_i32)
+    read_hog_mode,
+    Some(encode_hog_mode)
 );
 
 // ---- Device core constants (AudioHardwareBase.h) ----
@@ -1388,13 +1422,13 @@ Property::new(
 /// Fixed at stream creation — a stream cannot change direction at runtime.
 /// Use this to determine whether the stream carries data to or from the
 /// hardware without having to track which device scope it came from.
-pub const STREAM_DIRECTION: Property<u32, Stream, ReadOnly, Silent, NoExtra> =
+pub const STREAM_DIRECTION: Property<Scope, Stream, ReadOnly, Silent, NoExtra> =
 Property::new(
     address(
         kAudioStreamPropertyDirection,
         kAudioObjectPropertyScopeGlobal
     ),
-    read_u32,
+    read_scope,
     None,
 );
 
@@ -1640,14 +1674,14 @@ Property::new(
 /// Writing `kAudioHardwarePowerHintFavorSavingPower` allows the HAL to make
 /// power-optimised scheduling decisions. Writing `kAudioHardwarePowerHintNone`
 /// restores normal behaviour.
-pub const SYSTEM_POWER_HINT: Property<u32, System, ReadWrite, Silent, NoExtra> =
+pub const SYSTEM_POWER_HINT: Property<PowerHint, System, ReadWrite, Silent, NoExtra> =
 Property::new(
     address(
         kAudioHardwarePropertyPowerHint,
         kAudioObjectPropertyScopeGlobal
     ),
-    read_u32,
-    Some(encode_u32)
+    read_power_hint,
+    Some(encode_power_hint)
 );
 
 /// The `AudioObjectID`s of all audio tap objects currently known to the HAL.
