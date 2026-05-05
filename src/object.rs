@@ -220,7 +220,7 @@ impl AudioObject<Device> {
         callback: F,
     ) -> Result<IOProc, CoreAudioError>
     where
-        F: Fn(&mut [AudioBuffer]) + Send + 'static,
+        F: Fn(&[AudioBuffer]) + Send + 'static,
     {
         IOProc::try_new(&self, callback)
     }

@@ -10,7 +10,7 @@ use crate::{errors::{CoreAudioError, ErrorKind, OSStatusCheck}, object::{AudioOb
 // ---- Structs ------------
 struct ClientCallbackData<F>
 where
-    F: Fn(&mut [AudioBuffer]) + Send + 'static,
+    F: Fn(&[AudioBuffer]) + Send + 'static,
 {
     callback: F,
 }
@@ -45,7 +45,7 @@ impl IOProc {
         callback: F,
     ) -> Result<Self, CoreAudioError>
     where
-        F: Fn(&mut [AudioBuffer]) + Send + 'static,
+        F: Fn(&[AudioBuffer]) + Send + 'static,
     {
         let client_data = ClientCallbackData {
             callback,
@@ -115,7 +115,7 @@ extern "C" fn io_callback<F>(
     client_data: *mut c_void,
 ) -> OSStatus
 where
-    F: Fn(&mut [AudioBuffer]) + Send + 'static,
+    F: Fn(&[AudioBuffer]) + Send + 'static,
 {
     unsafe {
         let client_data = &*(client_data as *mut ClientCallbackData<F>);
@@ -137,7 +137,7 @@ where
             }
         }).collect();
 
-        (client_data.callback)(&mut audio_buffers)
+        (client_data.callback)(&audio_buffers)
     }
     
     0

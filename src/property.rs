@@ -83,6 +83,10 @@ fn read_string(bytes: &[u8]) -> Result<String, CoreAudioError> {
     Ok(cf_string.to_string())
 }
 
+pub(crate) fn encode_string(value: String) -> Vec<u8> {
+    value.into()
+}
+
 fn read_bool(bytes: &[u8]) -> Result<bool, CoreAudioError> {
     let value = u32::from_ne_bytes(
         match bytes[..4].try_into() {

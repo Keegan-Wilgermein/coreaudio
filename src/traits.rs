@@ -1,7 +1,7 @@
 //! # Traits
 
 // ---- Imports ------------
-use crate::{Device, Global, Property, Stream, System, property::{Listenable, NeedBoth, NeedElement, NeedQualifier, NoExtra, ReadWrite, encode_u32}};
+use crate::{Device, Global, Property, Stream, System, property::{Listenable, NeedBoth, NeedElement, NeedQualifier, NoExtra, ReadWrite, encode_string, encode_u32}};
 
 // ---- Traits ------------
 #[diagnostic::on_unimplemented(
@@ -41,12 +41,15 @@ impl CanListen for Listenable {}
     message = "this property requires additional data before it can be used",
     label = "check for `.with_qualifier()` or `.for_element()` methods on this property",
 )]
-
 /// Checks for no extra data on a property
 pub trait HasAllData {}
 
 impl HasAllData for NoExtra {}
 
+#[diagnostic::on_unimplemented(
+    message = "incorrect qualifier data type",
+    label = "check the `.with_qualifier()` method for expected type",
+)]
 /// Method to add qualifier data to property
 pub trait IntoQualifierBytes {
     fn into_bytes(self) -> Vec<u8>;
@@ -55,6 +58,12 @@ pub trait IntoQualifierBytes {
 impl IntoQualifierBytes for u32 {
     fn into_bytes(self) -> Vec<u8> {
         encode_u32(self)
+    }
+}
+
+impl IntoQualifierBytes for String {
+    fn into_bytes(self) -> Vec<u8> {
+        encode_string(self)
     }
 }
 
