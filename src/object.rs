@@ -1,4 +1,10 @@
-//! # Objects
+//! CoreAudio object hierarchy: system, device, and stream.
+//!
+//! The central type is [`AudioObject<T>`], where `T` is a marker that selects
+//! which methods are available. The markers are [`System`], [`Device`],
+//! [`Stream`], and [`Global`]. Property access, listener registration, and I/O
+//! proc creation are all gated through the type system so invalid operations
+//! are rejected at compile time.
 
 #![allow(unsafe_code)]
 
@@ -9,27 +15,45 @@ use std::{ffi::c_void, marker::PhantomData, ptr::null};
 use coreaudio_sys::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectSetPropertyData, kAudioHardwareUnsupportedOperationError, kAudioObjectSystemObject};
 
 // ---- Structs ------------
-/// Identifier for `AudioObject` to expose global property access
+
+/// Marker for [`AudioObject`] granting access to properties on any object type.
+///
+/// `Global` properties are defined on the base `AudioObject` class in CoreAudio
+/// and apply equally to system objects, devices, and streams. A
+/// `Property<_, Global, _, _, _>` constant can be used with any `AudioObject`.
 pub struct Global;
 
-/// Identifier for `AudioObject` to expose system object functions
+/// Marker for [`AudioObject`] granting access to system-wide HAL properties.
+///
+/// Construct the system object with `AudioObject::<System>::default()`. It
+/// exposes device enumeration, default device selection, and global HAL state.
 pub struct System;
 
-/// Identifier for `AudioObject` to expose device object functions
+/// Marker for [`AudioObject`] granting access to device-specific properties.
+///
+/// Obtain device objects from [`AudioObject::<System>::devices`] or
+/// [`AudioObject::<System>::devices_with_scope`].
 pub struct Device;
 
-/// Identifier for `AudioObject` to expose stream object functions
+/// Marker for [`AudioObject`] granting access to stream-specific properties.
+///
+/// Obtain stream objects from [`AudioObject::<Device>::streams`] or
+/// [`AudioObject::<Device>::streams_with_scope`].
 pub struct Stream;
 
-/// Describes an object in use by CoreAudio
-/// and exposes specific functions for different variants
+/// A CoreAudio HAL object identified by an `AudioObjectID`.
+///
+/// The type parameter `T` is one of [`System`], [`Device`], [`Stream`],
+/// and determines which `impl` blocks — and therefore which methods
+/// and properties — are available on this value.
 pub struct AudioObject<T> {
-    /// ID for the object
+    /// Raw CoreAudio object identifier.
     id: AudioObjectID,
     _marker: PhantomData<T>,
 }
 
 impl Default for AudioObject<System> {
+    /// Returns the singleton system object (`kAudioObjectSystemObject`).
     fn default() -> Self {
         Self {
             id: kAudioObjectSystemObject,
@@ -39,6 +63,7 @@ impl Default for AudioObject<System> {
 }
 
 impl From<u32> for AudioObject<Device> {
+    /// Wraps a raw `AudioObjectID` as a device object.
     fn from(value: u32) -> Self {
         Self {
             id: value,
@@ -48,6 +73,7 @@ impl From<u32> for AudioObject<Device> {
 }
 
 impl From<u32> for AudioObject<Stream> {
+    /// Wraps a raw `AudioObjectID` as a stream object.
     fn from(value: u32) -> Self {
         Self {
             id: value,
@@ -57,15 +83,15 @@ impl From<u32> for AudioObject<Stream> {
 }
 
 impl<T> AudioObject<T> {
-    /// Returns the objects ID
+    /// Returns the raw `AudioObjectID` for this object.
     pub fn id(&self) -> u32 {
         self.id
     }
 }
 
-// ---- Implementation on `AudioDevice<System>` --------------------------
+// ---- Implementation on `AudioObject<System>` --------------------------
 impl AudioObject<System> {
-    /// Gets all avaliable devices regardless of scope
+    /// Returns all audio devices currently known to the HAL, regardless of scope.
     pub fn devices(&self) ->
     Result<Vec<AudioObject<Device>>, CoreAudioError> {
         Ok(
@@ -77,22 +103,25 @@ impl AudioObject<System> {
         )
     }
 
-    /// Gets all avaliable devices with scope
+    /// Returns all audio devices that have at least one stream in the given scope.
+    ///
+    /// Devices with no streams in `scope` (e.g. an output-only device queried
+    /// with `Scope::Input`) are excluded from the result.
     pub fn devices_with_scope(&self, scope: Scope) ->
     Result<Vec<AudioObject<Device>>, CoreAudioError> {
         let all_devices = self.devices()?;
-    
+
         Ok(all_devices.into_iter().filter(|device| {
             let streams = match scope {
                 Scope::Input => device.get_property(DEVICE_INPUT_STREAMS),
                 Scope::Output => device.get_property(DEVICE_OUTPUT_STREAMS),
             };
-            
+
             streams.map(|s: Vec<AudioObjectID>| !s.is_empty()).unwrap_or(false)
         }).collect())
     }
 
-    /// Gets the current device with scope
+    /// Returns the device currently selected as the system default for `scope`.
     pub fn current_device(&self, scope: Scope) ->
     Result<AudioObject<Device>, CoreAudioError> {
         let id = match scope {
@@ -103,7 +132,9 @@ impl AudioObject<System> {
         Ok(AudioObject::<Device>::from(id))
     }
 
-    /// Gets the value of a property
+    /// Reads a system-scoped property value.
+    ///
+    /// The property constant's object type must be [`System`] or [`Global`].
     pub fn get_property<V, D, A, L, E>(
         &self,
         property: Property<V, D, A, L, E>,
@@ -115,7 +146,10 @@ impl AudioObject<System> {
         get_property_internal(self.id, property)
     }
 
-    /// Sets the value of a property
+    /// Writes a system-scoped property value.
+    ///
+    /// The property constant must be [`ReadWrite`](crate::property::ReadWrite)
+    /// and its object type must be [`System`] or [`Global`].
     pub fn set_property<V, D, A, L, E>(
         &self,
         property: Property<V, D, A, L, E>,
@@ -129,7 +163,12 @@ impl AudioObject<System> {
         set_property_internal(self.id, property, value)
     }
 
-    /// Adds a listener to a property
+    /// Registers a listener for a system-scoped property.
+    ///
+    /// The property constant must be
+    /// [`Listenable`](crate::property::Listenable) and its object type must be
+    /// [`System`] or [`Global`]. Drop the returned [`PropertyListener`] to
+    /// unregister.
     pub fn add_listener<V, D, A, L, E>(
         &self,
         property: Property<V, D, A, L, E>,
@@ -139,13 +178,15 @@ impl AudioObject<System> {
         L: CanListen,
         E: HasAllData,
     {
-        add_listener_internal(self.id, property)
+        PropertyListener::try_new(self.id, property.address, property.read)
     }
 }
 
-// ---- Implementation on `AudioDevice<Device>` --------------------------
+// ---- Implementation on `AudioObject<Device>` --------------------------
 impl AudioObject<Device> {
-    /// Gets all avaliable streams regardless of scope
+    /// Returns all streams on this device, regardless of scope.
+    ///
+    /// Input and output streams are combined into a single list.
     pub fn streams(&self) ->
     Result<Vec<AudioObject<Stream>>, CoreAudioError> {
         let mut streams = self.get_property(DEVICE_INPUT_STREAMS)?;
@@ -161,7 +202,7 @@ impl AudioObject<Device> {
         )
     }
 
-    /// Gets all avaliable streams with scope
+    /// Returns all streams on this device in the given scope.
     pub fn streams_with_scope(&self, scope: Scope) ->
     Result<Vec<AudioObject<Stream>>, CoreAudioError> {
         let streams = match scope {
@@ -176,7 +217,9 @@ impl AudioObject<Device> {
         )
     }
 
-    /// Gets the value of a property
+    /// Reads a device-scoped property value.
+    ///
+    /// The property constant's object type must be [`Device`] or [`Global`].
     pub fn get_property<V, D, A, L, E>(
         &self,
         property: Property<V, D, A, L, E>,
@@ -188,7 +231,10 @@ impl AudioObject<Device> {
         get_property_internal(self.id, property)
     }
 
-    /// Sets the value of a property
+    /// Writes a device-scoped property value.
+    ///
+    /// The property constant must be [`ReadWrite`](crate::property::ReadWrite)
+    /// and its object type must be [`Device`] or [`Global`].
     pub fn set_property<V, D, A, L, E>(
         &self,
         property: Property<V, D, A, L, E>,
@@ -202,7 +248,12 @@ impl AudioObject<Device> {
         set_property_internal(self.id, property, value)
     }
 
-    /// Adds a listener to a property
+    /// Registers a listener for a device-scoped property.
+    ///
+    /// The property constant must be
+    /// [`Listenable`](crate::property::Listenable) and its object type must be
+    /// [`Device`] or [`Global`]. Drop the returned [`PropertyListener`] to
+    /// unregister.
     pub fn add_listener<V, D, A, L, E>(
         &self,
         property: Property<V, D, A, L, E>,
@@ -212,9 +263,14 @@ impl AudioObject<Device> {
         L: CanListen,
         E: HasAllData,
     {
-        add_listener_internal(self.id, property)
+        PropertyListener::try_new(self.id, property.address, property.read)
     }
 
+    /// Registers an audio render callback on this device and returns the
+    /// resulting [`IOProc`].
+    ///
+    /// The callback receives a slice of [`AudioBuffer`]s once per I/O cycle.
+    /// Call [`IOProc::play`] to start audio delivery.
     pub fn add_io_proc<F>(
         &self,
         callback: F,
@@ -226,9 +282,11 @@ impl AudioObject<Device> {
     }
 }
 
-// ---- Implementation on `AudioDevice<Stream>` --------------------------
+// ---- Implementation on `AudioObject<Stream>` --------------------------
 impl AudioObject<Stream> {
-    /// Gets the value of a property
+    /// Reads a stream-scoped property value.
+    ///
+    /// The property constant's object type must be [`Stream`] or [`Global`].
     pub fn get_property<V, D, A, L, E>(
         &self,
         property: Property<V, D, A, L, E>,
@@ -240,7 +298,10 @@ impl AudioObject<Stream> {
         get_property_internal(self.id, property)
     }
 
-    /// Sets the value of a property
+    /// Writes a stream-scoped property value.
+    ///
+    /// The property constant must be [`ReadWrite`](crate::property::ReadWrite)
+    /// and its object type must be [`Stream`] or [`Global`].
     pub fn set_property<V, D, A, L, E>(
         &self,
         property: Property<V, D, A, L, E>,
@@ -254,7 +315,12 @@ impl AudioObject<Stream> {
         set_property_internal(self.id, property, value)
     }
 
-    /// Adds a listener to a property
+    /// Registers a listener for a stream-scoped property.
+    ///
+    /// The property constant must be
+    /// [`Listenable`](crate::property::Listenable) and its object type must be
+    /// [`Stream`] or [`Global`]. Drop the returned [`PropertyListener`] to
+    /// unregister.
     pub fn add_listener<V, D, A, L, E>(
         &self,
         property: Property<V, D, A, L, E>,
@@ -264,11 +330,17 @@ impl AudioObject<Stream> {
         L: CanListen,
         E: HasAllData,
     {
-        add_listener_internal(self.id, property)
+        PropertyListener::try_new(self.id, property.address, property.read)
     }
 }
 
 // ---- Functions -----------
+
+/// Reads a property from the object identified by `id`.
+///
+/// Calls `AudioObjectGetPropertyDataSize` to determine the required buffer
+/// size, allocates the buffer, then calls `AudioObjectGetPropertyData` and
+/// deserialises the result using `property.read`.
 pub(crate) fn get_property_internal<V, D, A, L, E>(
     id: AudioObjectID,
     property: Property<V, D, A, L, E>,
@@ -304,6 +376,11 @@ pub(crate) fn get_property_internal<V, D, A, L, E>(
     }
  }
 
+/// Writes a property value to the object identified by `id`.
+///
+/// Calls `property.encode` to serialise `value` to bytes, then passes those
+/// bytes to `AudioObjectSetPropertyData`. Returns an error if the property has
+/// no encoder (i.e. is read-only).
 fn set_property_internal<V, D, A, L, E>(
     id: AudioObjectID,
     property: Property<V, D, A, L, E>,
@@ -336,11 +413,4 @@ fn set_property_internal<V, D, A, L, E>(
 
         Ok(())
     }
-}
-
-fn add_listener_internal<V, D, A, L, E>(
-    id: AudioObjectID,
-    property: Property<V, D, A, L, E>,
-) -> Result<PropertyListener<V, D, A>, CoreAudioError> {
-    PropertyListener::try_new(id, property.address, property.read)
 }

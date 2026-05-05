@@ -1,4 +1,8 @@
-//! # Data types
+//! Audio data types used throughout the crate.
+//!
+//! This module defines enums and structs that map CoreAudio's C types to
+//! idiomatic Rust equivalents. Most types implement `From`/`Into` conversions
+//! to and from their underlying C representations.
 
 #![forbid(unsafe_code)]
 
@@ -11,16 +15,21 @@ use num_traits::AsPrimitive;
 use crate::errors::{CoreAudioError, ErrorKind};
 
 // ---- Constants ------------
+
+/// Maximum value for a 20-bit signed integer sample.
 const I20_MAX: i32 = 2i32.pow(20 - 1) - 1;
+
+/// Maximum value for a 24-bit signed integer sample.
 const I24_MAX: i32 = 2i32.pow(24 - 1) - 1;
 
 // ---- Enums ------------
-/// Input or output device selector
+
+/// Whether audio flows into or out of a device.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scope {
-    /// Input devices
+    /// Audio captured from the outside world (microphone, line-in, etc.).
     Input,
-    /// Output devices
+    /// Audio sent to speakers or a line-out.
     Output,
 }
 
@@ -36,16 +45,26 @@ impl TryFrom<u32> for Scope {
     }
 }
 
+/// Numeric encoding of audio samples.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SampleEncoding {
+    /// IEEE 754 floating-point.
     Float,
+    /// Two's-complement signed integer.
     SignedInt,
+    /// Unsigned integer (offset binary).
     UnSignedInt,
 }
 
+/// Whether this process holds exclusive access to a device.
+///
+/// CoreAudio represents hog mode as a PID: `-1` means the device is free,
+/// any other value is the PID of the owning process.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HogMode {
+    /// No process holds exclusive access.
     Released,
+    /// The device is owned by the process with this PID.
     Owned(i32),
 }
 
@@ -67,9 +86,12 @@ impl Into<i32> for HogMode {
     }
 }
 
+/// A hint to the HAL about the system's current power state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PowerHint {
+    /// Normal operation; no power-saving constraint.
     None,
+    /// Prefer lower power consumption in scheduling decisions.
     PowerSaving,
 }
 
@@ -94,25 +116,44 @@ impl Into<u32> for PowerHint {
     }
 }
 
+/// The physical connection type between a device and the host system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportType {
+    /// Integrated hardware (e.g. the MacBook speaker or internal mic).
     BuiltIn,
+    /// An aggregate device composed of multiple logical devices.
     Aggregate,
+    /// An automatically created aggregate device.
     AutoAggregate,
+    /// A software-only virtual device with no physical hardware.
     Virtual,
-    PCIE,
+    /// PCI or PCIe expansion card.
+    PCIe,
+    /// Universal Serial Bus.
     USB,
+    /// FireWire (IEEE 1394).
     FireWire,
+    /// Bluetooth Classic.
     Bluetooth,
+    /// Bluetooth Low Energy.
     BluetoothLE,
+    /// HDMI audio channel.
     HDMI,
+    /// DisplayPort audio channel.
     DisplayPort,
+    /// AirPlay wireless streaming.
     AirPlay,
+    /// Audio Video Bridging (IEEE 802.1 AVB).
     AVB,
+    /// Thunderbolt (includes USB4 tunnelled Thunderbolt).
     Thunderbolt,
+    /// Continuity Camera (iPhone used as webcam/mic).
     ContinuityCapture,
+    /// Continuity Camera over a wired USB connection.
     ContinuityCaptureWired,
+    /// Continuity Camera over a wireless connection.
     ContinuityCaptureWireless,
+    /// An unrecognised transport type; contains the raw transport ID.
     Unknown(u32),
 }
 
@@ -124,7 +165,7 @@ impl From<u32> for TransportType {
             kAudioDeviceTransportTypeAggregate => Self::Aggregate,
             kAudioDeviceTransportTypeAutoAggregate => Self::AutoAggregate,
             kAudioDeviceTransportTypeVirtual => Self::Virtual,
-            kAudioDeviceTransportTypePCI => Self::PCIE,
+            kAudioDeviceTransportTypePCI => Self::PCIe,
             kAudioDeviceTransportTypeUSB => Self::USB,
             kAudioDeviceTransportTypeFireWire => Self::FireWire,
             kAudioDeviceTransportTypeBluetooth => Self::Bluetooth,
@@ -142,20 +183,37 @@ impl From<u32> for TransportType {
     }
 }
 
+/// The type of physical endpoint a stream connects to.
+///
+/// Reported by `TERMINAL_TYPE` and maps to the `kAudioStreamTerminalType*`
+/// constants in CoreAudio.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TerminalType {
+    /// Analog line-level input or output.
     Line,
+    /// Digital audio interface such as S/PDIF or AES3.
     DigitalAudioInterface,
+    /// A loudspeaker.
     Speaker,
+    /// Headphone output.
     Headphones,
+    /// Low-frequency effects (subwoofer) speaker.
     LFESpeaker,
+    /// A speaker inside a handset receiver.
     ReceiverSpeaker,
+    /// A microphone input.
     Microphone,
+    /// A combined headset microphone (headphone + mic combo jack).
     HeadsetMicrophone,
+    /// A microphone in a handset receiver.
     ReceiverMicrophone,
+    /// Telephone TTY/TDD interface.
     TTY,
+    /// HDMI audio endpoint.
     HDMI,
+    /// DisplayPort audio endpoint.
     DisplayPort,
+    /// An unrecognised terminal type; contains the raw value.
     Unknown(u32),
 }
 
@@ -180,26 +238,43 @@ impl From<u32> for TerminalType {
     }
 }
 
-
+/// The concrete bit layout of an audio sample.
+///
+/// Constructed from a `bits_per_channel` value and a [`SampleEncoding`].
+/// Used by [`SampleFormat::resample`] to scale a normalised `f32` value into
+/// the target numeric type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SampleFormat {
-// Unsigned
+    // Unsigned
+    /// 8-bit unsigned integer.
     U8,
+    /// 16-bit unsigned integer.
     U16,
+    /// 32-bit unsigned integer.
     U32,
-// Signed
+    // Signed
+    /// 8-bit signed integer.
     I8,
+    /// 16-bit signed integer.
     I16,
+    /// 20-bit signed integer (packed into a larger word by the driver).
     I20,
+    /// 24-bit signed integer.
     I24,
+    /// 32-bit signed integer.
     I32,
+    /// 64-bit signed integer.
     I64,
-// Floating point
+    // Floating point
+    /// 32-bit IEEE 754 float.
     F32,
+    /// 64-bit IEEE 754 float.
     F64,
 }
 
 impl SampleFormat {
+    /// Constructs a `SampleFormat` from a bit depth and encoding, returning
+    /// `None` for combinations that have no known mapping.
     fn from(bits_per_channel: u32, encoding: SampleEncoding) -> Option<Self> {
         match (encoding, bits_per_channel) {
             (SampleEncoding::UnSignedInt, 8) => Some(SampleFormat::U8),
@@ -217,7 +292,13 @@ impl SampleFormat {
         }
     }
 
-    pub fn resample<T>(self, sample: f32) -> T
+    /// Converts a normalised `f32` sample in `[-1.0, 1.0]` into the target
+    /// numeric type `T` using the full range of this format.
+    ///
+    /// Unsigned formats are mapped to `[0, MAX]`; signed and float formats are
+    /// mapped to `[-MAX, MAX]` and `[-1.0, 1.0]` respectively. Values outside
+    /// `[-1.0, 1.0]` are clamped before conversion.
+    pub fn resample<T>(&self, sample: f32) -> T
     where
         T: Copy + 'static,
         f64: AsPrimitive<T>,
@@ -243,32 +324,59 @@ impl SampleFormat {
     }
 }
 
+/// MPEG-4 AAC sub-format variant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AACFormat {
+    /// Standard MPEG-4 AAC (LC profile).
     Standard,
+    /// AAC Enhanced Low Delay.
     ELD,
+    /// AAC Enhanced Low Delay v2.
     ELDv2,
+    /// AAC Enhanced Low Delay with Spectral Band Replication.
     ELDSBR,
+    /// AAC High Efficiency (HE-AAC v1, with SBR).
     HE,
+    /// AAC High Efficiency v2 (HE-AAC v2, with SBR + PS).
     HEv2,
+    /// AAC Low Delay.
     LD,
+    /// AAC Spatial Audio (Apple-specific spatial variant).
     Spatial,
 }
 
+/// Audio codec or compression format identifier.
+///
+/// Maps to the `mFormatID` field of `AudioStreamBasicDescription`. Implements
+/// `From<u32>` and `Into<u32>` to round-trip through the CoreAudio four-char
+/// code representation.
 #[derive(Debug, Clone, Copy)]
 pub enum FormatId {
+    /// Uncompressed linear PCM.
     LinearPCM,
+    /// MPEG-4 AAC in one of several sub-formats.
     AAC(AACFormat),
+    /// Apple Lossless Audio Codec.
     ALAC,
+    /// Dolby AC-3.
     AC3,
+    /// Apple Positional Audio Codec (spatial audio).
     APAC,
+    /// AES3 / S/PDIF digital audio.
     AES3,
+    /// ITU-T G.711 A-law companding.
     ALaw,
+    /// Adaptive Multi-Rate (GSM narrowband).
     AMR,
+    /// Adaptive Multi-Rate Wideband.
     AMRWB,
+    /// Dolby Digital Plus (Enhanced AC-3).
     EnhancedAC3,
+    /// Opus interactive audio codec.
     Opus,
+    /// MPEG-1 Layer III (MP3).
     MP3,
+    /// An unrecognised format; contains the raw four-char code as a `u32`.
     Unknown(u32),
 }
 
@@ -332,12 +440,22 @@ impl Into<u32> for FormatId {
 }
 
 // ----- Structs ------------
+
+/// Decoded `mFormatFlags` from an `AudioStreamBasicDescription`.
+///
+/// The raw CoreAudio flags field is a bitmask; this struct breaks it out into
+/// named boolean fields for easier inspection.
 #[derive(Debug, Clone, Copy)]
 pub struct FormatFlags {
+    /// Whether samples are float, signed integer, or unsigned integer.
     encoding: SampleEncoding,
+    /// Whether multi-byte samples are stored big-endian.
     is_big_endian: bool,
+    /// Whether samples fill all bits of their container with no padding.
     is_packed: bool,
+    /// Whether channel data is interleaved within each buffer.
     is_interleaved: bool,
+    /// Whether mixing this stream with others is prohibited.
     is_non_mixable: bool,
 }
 
@@ -364,56 +482,77 @@ impl From<u32> for FormatFlags {
 impl Into<u32> for FormatFlags {
     fn into(self) -> u32 {
         let mut result = 0u32;
-        
+
         match self.encoding {
             SampleEncoding::Float => result |= kAudioFormatFlagIsFloat,
             SampleEncoding::SignedInt => result |= kAudioFormatFlagIsSignedInteger,
             SampleEncoding::UnSignedInt => (),
         }
-        
+
         if self.is_big_endian  { result |= kAudioFormatFlagIsBigEndian }
         if self.is_packed      { result |= kAudioFormatFlagIsPacked }
         if !self.is_interleaved { result |= kAudioFormatFlagIsNonInterleaved }
         if self.is_non_mixable { result |= kAudioFormatFlagIsNonMixable }
-        
+
         result
     }
 }
 
 impl FormatFlags {
+    /// The numeric encoding of each sample.
     pub fn encoding(&self) -> SampleEncoding {
         self.encoding
     }
 
+    /// `true` if multi-byte samples are stored in big-endian byte order.
     pub fn is_big_endian(&self) -> bool {
         self.is_big_endian
     }
 
+    /// `true` if sample bits fill their container word with no padding.
     pub fn is_packed(&self) -> bool {
         self.is_packed
     }
 
+    /// `true` if channel data is interleaved within a single buffer.
     pub fn is_interleaved(&self) -> bool {
         self.is_interleaved
     }
 
+    /// `true` if this stream cannot be mixed with others by the HAL.
     pub fn is_non_mixable(&self) -> bool {
         self.is_non_mixable
     }
 }
 
-/// Audio stream description
+/// A Rust-friendly view of `AudioStreamBasicDescription`.
+///
+/// Describes the complete audio format of a stream: sample rate, codec,
+/// channel count, bit depth, and layout. Obtain one via
+/// [`STREAM_VIRTUAL_FORMAT`](crate::property::STREAM_VIRTUAL_FORMAT) or
+/// [`STREAM_PHYSICAL_FORMAT`](crate::property::STREAM_PHYSICAL_FORMAT).
 #[derive(Debug, Clone, Copy)]
 pub struct StreamDescription {
+    /// Sample rate in Hz (e.g. `44100.0` or `48000.0`).
     sample_rate: f64,
+    /// Codec or compression scheme.
     format_id: FormatId,
+    /// Decoded format flags describing byte order, packing, and interleaving.
     flags: FormatFlags,
+    /// Concrete sample format derived from `bits_per_channel` and encoding,
+    /// or `None` for unknown compressed formats.
     sample_format: Option<SampleFormat>,
+    /// Number of bytes in one packet of compressed data, or per frame for PCM.
     bytes_per_packet: u32,
+    /// Number of frames in one packet (1 for uncompressed PCM).
     frames_per_packet: u32,
+    /// Number of bytes in one frame (one sample per channel).
     bytes_per_frame: u32,
+    /// Number of channels per audio frame.
     channels_per_frame: u32,
+    /// Number of valid audio bits per channel (may be less than the container size).
     bits_per_channel: u32,
+    /// Reserved; always zero.
     reserved: u32,
 }
 
@@ -455,43 +594,57 @@ impl Into<AudioStreamBasicDescription> for StreamDescription {
 }
 
 impl StreamDescription {
+    /// Sample rate in Hz.
     pub fn sample_rate(&self) -> f64 {
         self.sample_rate
     }
 
+    /// Codec or compression scheme.
     pub fn format_id(&self) -> FormatId {
         self.format_id
     }
 
+    /// Decoded format flags.
     pub fn flags(&self) -> FormatFlags {
         self.flags
     }
 
+    /// Concrete sample format, or `None` for compressed audio.
     pub fn sample_format(&self) -> Option<SampleFormat> {
         self.sample_format
     }
 
+    /// Bytes per compressed packet (equals `bytes_per_frame` for PCM).
     pub fn bytes_per_packet(&self) -> u32 {
         self.bytes_per_packet
     }
 
+    /// Frames per compressed packet (always `1` for PCM).
     pub fn frames_per_packet(&self) -> u32 {
         self.frames_per_packet
     }
 
+    /// Bytes in one audio frame (one sample per channel).
     pub fn bytes_per_frame(&self) -> u32 {
         self.bytes_per_frame
     }
 
+    /// Number of channels per frame.
     pub fn channels_per_frame(&self) -> u32 {
         self.channels_per_frame
     }
 }
 
-/// A range of sizes supported by a device to be used as a buffer size
+/// The range of buffer frame sizes a device supports.
+///
+/// Both ends of the range are inclusive. Use [`valid_sizes`](Self::valid_sizes)
+/// to enumerate only power-of-two sizes within the range, as required by most
+/// CoreAudio devices.
 #[derive(Debug)]
 pub struct BufferFrameSizeRange {
+    /// Smallest supported buffer size in frames.
     min: u32,
+    /// Largest supported buffer size in frames.
     max: u32,
 }
 
@@ -505,7 +658,10 @@ impl From<AudioValueRange> for BufferFrameSizeRange {
 }
 
 impl BufferFrameSizeRange {
-    /// Returns all values between `min` and `max` that are a power of 2
+    /// Returns all power-of-two values between `min` and `max` inclusive.
+    ///
+    /// CoreAudio devices typically only accept power-of-two buffer sizes.
+    /// The returned list is sorted in ascending order.
     pub fn valid_sizes(&self) -> Vec<u32> {
         let mut size = self.min.next_power_of_two();
         let mut sizes = Vec::new();
@@ -517,9 +673,16 @@ impl BufferFrameSizeRange {
     }
 }
 
+/// A [`StreamDescription`] paired with the sample rate range it supports.
+///
+/// Used by `STREAM_AVAILABLE_VIRTUAL_FORMATS` and
+/// `STREAM_AVAILABLE_PHYSICAL_FORMATS` to describe each format the stream can
+/// operate in.
 #[derive(Debug)]
 pub struct StreamRangedDescription {
+    /// The audio format parameters for this entry.
     stream_description: StreamDescription,
+    /// The range of sample rates valid for this format.
     sample_rate_range: SampleRateRange,
 }
 
@@ -533,18 +696,27 @@ impl From<AudioStreamRangedDescription> for StreamRangedDescription {
 }
 
 impl StreamRangedDescription {
+    /// The audio format description.
     pub fn stream_description(&self) -> StreamDescription {
         self.stream_description
     }
 
+    /// The sample rate range supported for this format.
     pub fn sample_rate_range(&self) -> SampleRateRange {
         self.sample_rate_range
     }
 }
 
+/// A continuous range of sample rates in Hz.
+///
+/// Some devices report discrete rates as ranges where `min == max`; others
+/// report a true continuous range. Use [`as_range`](Self::as_range) to get a
+/// standard Rust `RangeInclusive<f64>`.
 #[derive(Debug, Clone, Copy)]
 pub struct SampleRateRange {
+    /// Lowest supported sample rate in Hz.
     min: f64,
+    /// Highest supported sample rate in Hz.
     max: f64,
 }
 
@@ -558,22 +730,31 @@ impl From<AudioValueRange> for SampleRateRange {
 }
 
 impl SampleRateRange {
+    /// Lowest sample rate in the range, in Hz.
     pub fn min(&self) -> f64 {
         self.min
     }
 
+    /// Highest sample rate in the range, in Hz.
     pub fn max(&self) -> f64 {
         self.max
     }
 
+    /// Returns the range as a standard `RangeInclusive<f64>`.
     pub fn as_range(&self) -> RangeInclusive<f64> {
         self.min..=self.max
     }
 }
 
+/// A continuous range of volume values in dBFS.
+///
+/// Used by `DEVICE_VOLUME_RANGE_DECIBELS` and related properties to describe
+/// the hardware's supported volume range on a given channel.
 #[derive(Debug, Clone, Copy)]
 pub struct DBRange {
+    /// Minimum volume in dBFS (typically a large negative number).
     min: f64,
+    /// Maximum volume in dBFS (typically `0.0`).
     max: f64,
 }
 
@@ -587,22 +768,32 @@ impl From<AudioValueRange> for DBRange {
 }
 
 impl DBRange {
+    /// Minimum volume in dBFS.
     pub fn min(&self) -> f64 {
         self.min
     }
 
+    /// Maximum volume in dBFS.
     pub fn max(&self) -> f64 {
         self.max
     }
 
+    /// Returns the range as a standard `RangeInclusive<f64>`.
     pub fn as_range(&self) -> RangeInclusive<f64> {
         self.min..=self.max
     }
 }
 
+/// A pair of channel indices representing a left/right stereo assignment.
+///
+/// Used by `DEVICE_PREFERRED_CHANNELS_FOR_STEREO` and
+/// `DEVICE_STEREO_PAN_CHANNELS` to identify which device channels carry the
+/// left and right signals.
 #[derive(Debug, Clone, Copy)]
 pub struct ChannelPair {
+    /// One-based device channel index for the left signal.
     left: u32,
+    /// One-based device channel index for the right signal.
     right: u32,
 }
 
@@ -616,14 +807,17 @@ impl From<[u32; 2]> for ChannelPair {
 }
 
 impl ChannelPair {
+    /// One-based device channel index for the left signal.
     pub fn left(&self) -> u32 {
         self.left
     }
 
+    /// One-based device channel index for the right signal.
     pub fn right(&self) -> u32 {
         self.right
     }
 
+    /// Returns the pair as a two-element array `[left, right]`.
     pub fn as_array(&self) -> [u32; 2] {
         [self.left, self.right]
     }

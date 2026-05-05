@@ -1,4 +1,14 @@
-//! # Properties
+//! Property descriptors and constants for CoreAudio HAL objects.
+//!
+//! Each property constant (e.g. [`DEVICE_NAME`]) is a [`Property`] value that
+//! encodes the property's value type, target object kind, access mode, and
+//! whether it supports listeners — all at the type level. Access-mode and
+//! listener markers are enforced by the trait bounds on `get_property`,
+//! `set_property`, and `add_listener`.
+//!
+//! The marker types ([`ReadOnly`], [`ReadWrite`], [`Listenable`], [`Silent`],
+//! [`NoExtra`], [`NeedElement`], [`NeedQualifier`], [`NeedBoth`]) carry no
+//! runtime data; they exist solely to drive compile-time checks.
 
 #![allow(unsafe_code)]
 
@@ -7,7 +17,7 @@ use crate::{Scope, data_types::{BufferFrameSizeRange, ChannelPair, DBRange, HogM
 use std::marker::PhantomData;
 use core_foundation::{base::TCFType, string::{CFString, CFStringRef}};
 use coreaudio_sys::{
-    AudioObjectID, AudioObjectPropertyAddress, AudioObjectPropertyScope, AudioObjectPropertySelector, AudioStreamBasicDescription, AudioStreamRangedDescription, AudioValueRange, kAudioDeviceProcessorOverload, kAudioDevicePropertyAvailableNominalSampleRates, kAudioDevicePropertyBufferFrameSize, kAudioDevicePropertyBufferFrameSizeRange, kAudioDevicePropertyChannelNominalLineLevel, kAudioDevicePropertyChannelNominalLineLevelNameForIDCFString, kAudioDevicePropertyChannelNominalLineLevels, kAudioDevicePropertyClipLight, kAudioDevicePropertyClockDomain, kAudioDevicePropertyClockSource, kAudioDevicePropertyClockSourceNameForIDCFString, kAudioDevicePropertyClockSources, kAudioDevicePropertyConfigurationApplication, kAudioDevicePropertyDataSource, kAudioDevicePropertyDataSourceNameForIDCFString, kAudioDevicePropertyDataSources, kAudioDevicePropertyDeviceCanBeDefaultDevice, kAudioDevicePropertyDeviceCanBeDefaultSystemDevice, kAudioDevicePropertyDeviceIsAlive, kAudioDevicePropertyDeviceIsRunning, kAudioDevicePropertyDeviceUID, kAudioDevicePropertyHighPassFilterSetting, kAudioDevicePropertyHighPassFilterSettingNameForIDCFString, kAudioDevicePropertyHighPassFilterSettings, kAudioDevicePropertyHogMode, kAudioDevicePropertyIOCycleUsage, kAudioDevicePropertyIOStoppedAbnormally, kAudioDevicePropertyIsHidden, kAudioDevicePropertyJackIsConnected, kAudioDevicePropertyLatency, kAudioDevicePropertyListenback, kAudioDevicePropertyModelUID, kAudioDevicePropertyMute, kAudioDevicePropertyNominalSampleRate, kAudioDevicePropertyPhantomPower, kAudioDevicePropertyPhaseInvert, kAudioDevicePropertyPlayThruDestination, kAudioDevicePropertyPlayThruDestinationNameForIDCFString, kAudioDevicePropertyPlayThruDestinations, kAudioDevicePropertyPreferredChannelLayout, kAudioDevicePropertyPreferredChannelsForStereo, kAudioDevicePropertyRelatedDevices, kAudioDevicePropertySafetyOffset, kAudioDevicePropertySolo, kAudioDevicePropertyStereoPan, kAudioDevicePropertyStereoPanChannels, kAudioDevicePropertyStreams, kAudioDevicePropertySubMute, kAudioDevicePropertySubVolumeDecibels, kAudioDevicePropertySubVolumeDecibelsToScalar, kAudioDevicePropertySubVolumeRangeDecibels, kAudioDevicePropertySubVolumeScalar, kAudioDevicePropertySubVolumeScalarToDecibels, kAudioDevicePropertyTalkback, kAudioDevicePropertyTransportType, kAudioDevicePropertyUsesVariableBufferFrameSizes, kAudioDevicePropertyVolumeDecibels, kAudioDevicePropertyVolumeDecibelsToScalar, kAudioDevicePropertyVolumeRangeDecibels, kAudioDevicePropertyVolumeScalar, kAudioDevicePropertyVolumeScalarToDecibels, kAudioHardwarePropertyBoxList, kAudioHardwarePropertyClockDeviceList, kAudioHardwarePropertyDefaultInputDevice, kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDefaultSystemOutputDevice, kAudioHardwarePropertyDevices, kAudioHardwarePropertyHogModeIsAllowed, kAudioHardwarePropertyIsInitingOrExiting, kAudioHardwarePropertyMixStereoToMono, kAudioHardwarePropertyPlugInList, kAudioHardwarePropertyPowerHint, kAudioHardwarePropertyProcessIsAudible, kAudioHardwarePropertyProcessIsMaster, kAudioHardwarePropertyServiceRestarted, kAudioHardwarePropertySleepingIsAllowed, kAudioHardwarePropertyTapList, kAudioHardwarePropertyTranslateBundleIDToPlugIn, kAudioHardwarePropertyTranslateBundleIDToTransportManager, kAudioHardwarePropertyTranslateUIDToBox, kAudioHardwarePropertyTranslateUIDToClockDevice, kAudioHardwarePropertyTranslateUIDToDevice, kAudioHardwarePropertyTransportManagerList, kAudioHardwarePropertyUnloadingIsAllowed, kAudioHardwarePropertyUserIDChanged, kAudioHardwarePropertyUserSessionIsActiveOrHeadless, kAudioObjectPropertyBaseClass, kAudioObjectPropertyClass, kAudioObjectPropertyCreator, kAudioObjectPropertyElementCategoryName, kAudioObjectPropertyElementMain, kAudioObjectPropertyElementName, kAudioObjectPropertyElementNumberName, kAudioObjectPropertyManufacturer, kAudioObjectPropertyModelName, kAudioObjectPropertyName, kAudioObjectPropertyOwnedObjects, kAudioObjectPropertyOwner, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyScopeInput, kAudioObjectPropertyScopeOutput, kAudioStreamPropertyAvailablePhysicalFormats, kAudioStreamPropertyAvailableVirtualFormats, kAudioStreamPropertyDirection, kAudioStreamPropertyIsActive, kAudioStreamPropertyLatency, kAudioStreamPropertyPhysicalFormat, kAudioStreamPropertyStartingChannel, kAudioStreamPropertyTerminalType, kAudioStreamPropertyVirtualFormat
+    AudioObjectID, AudioObjectPropertyAddress, AudioObjectPropertyScope, AudioObjectPropertySelector, AudioStreamBasicDescription, AudioStreamRangedDescription, AudioValueRange, kAudioDeviceProcessorOverload, kAudioDevicePropertyAvailableNominalSampleRates, kAudioDevicePropertyBufferFrameSize, kAudioDevicePropertyBufferFrameSizeRange, kAudioDevicePropertyChannelNominalLineLevel, kAudioDevicePropertyChannelNominalLineLevelNameForIDCFString, kAudioDevicePropertyChannelNominalLineLevels, kAudioDevicePropertyClipLight, kAudioDevicePropertyClockDomain, kAudioDevicePropertyClockSource, kAudioDevicePropertyClockSourceNameForIDCFString, kAudioDevicePropertyClockSources, kAudioDevicePropertyConfigurationApplication, kAudioDevicePropertyDataSource, kAudioDevicePropertyDataSourceNameForIDCFString, kAudioDevicePropertyDataSources, kAudioDevicePropertyDeviceCanBeDefaultDevice, kAudioDevicePropertyDeviceCanBeDefaultSystemDevice, kAudioDevicePropertyDeviceIsAlive, kAudioDevicePropertyDeviceIsRunning, kAudioDevicePropertyDeviceUID, kAudioDevicePropertyHighPassFilterSetting, kAudioDevicePropertyHighPassFilterSettingNameForIDCFString, kAudioDevicePropertyHighPassFilterSettings, kAudioDevicePropertyHogMode, kAudioDevicePropertyIOCycleUsage, kAudioDevicePropertyIOStoppedAbnormally, kAudioDevicePropertyIsHidden, kAudioDevicePropertyJackIsConnected, kAudioDevicePropertyLatency, kAudioDevicePropertyListenback, kAudioDevicePropertyModelUID, kAudioDevicePropertyMute, kAudioDevicePropertyNominalSampleRate, kAudioDevicePropertyPhantomPower, kAudioDevicePropertyPhaseInvert, kAudioDevicePropertyPlayThruDestination, kAudioDevicePropertyPlayThruDestinationNameForIDCFString, kAudioDevicePropertyPlayThruDestinations, kAudioDevicePropertyPreferredChannelsForStereo, kAudioDevicePropertyRelatedDevices, kAudioDevicePropertySafetyOffset, kAudioDevicePropertySolo, kAudioDevicePropertyStereoPan, kAudioDevicePropertyStereoPanChannels, kAudioDevicePropertyStreams, kAudioDevicePropertySubMute, kAudioDevicePropertySubVolumeDecibels, kAudioDevicePropertySubVolumeDecibelsToScalar, kAudioDevicePropertySubVolumeRangeDecibels, kAudioDevicePropertySubVolumeScalar, kAudioDevicePropertySubVolumeScalarToDecibels, kAudioDevicePropertyTalkback, kAudioDevicePropertyTransportType, kAudioDevicePropertyUsesVariableBufferFrameSizes, kAudioDevicePropertyVolumeDecibels, kAudioDevicePropertyVolumeDecibelsToScalar, kAudioDevicePropertyVolumeRangeDecibels, kAudioDevicePropertyVolumeScalar, kAudioDevicePropertyVolumeScalarToDecibels, kAudioHardwarePropertyBoxList, kAudioHardwarePropertyClockDeviceList, kAudioHardwarePropertyDefaultInputDevice, kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDefaultSystemOutputDevice, kAudioHardwarePropertyDevices, kAudioHardwarePropertyHogModeIsAllowed, kAudioHardwarePropertyIsInitingOrExiting, kAudioHardwarePropertyMixStereoToMono, kAudioHardwarePropertyPlugInList, kAudioHardwarePropertyPowerHint, kAudioHardwarePropertyProcessIsAudible, kAudioHardwarePropertyProcessIsMaster, kAudioHardwarePropertyServiceRestarted, kAudioHardwarePropertySleepingIsAllowed, kAudioHardwarePropertyTapList, kAudioHardwarePropertyTranslateBundleIDToPlugIn, kAudioHardwarePropertyTranslateBundleIDToTransportManager, kAudioHardwarePropertyTranslateUIDToBox, kAudioHardwarePropertyTranslateUIDToClockDevice, kAudioHardwarePropertyTranslateUIDToDevice, kAudioHardwarePropertyTransportManagerList, kAudioHardwarePropertyUnloadingIsAllowed, kAudioHardwarePropertyUserIDChanged, kAudioHardwarePropertyUserSessionIsActiveOrHeadless, kAudioObjectPropertyBaseClass, kAudioObjectPropertyClass, kAudioObjectPropertyCreator, kAudioObjectPropertyElementCategoryName, kAudioObjectPropertyElementMain, kAudioObjectPropertyElementName, kAudioObjectPropertyElementNumberName, kAudioObjectPropertyManufacturer, kAudioObjectPropertyModelName, kAudioObjectPropertyName, kAudioObjectPropertyOwnedObjects, kAudioObjectPropertyOwner, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyScopeInput, kAudioObjectPropertyScopeOutput, kAudioStreamPropertyAvailablePhysicalFormats, kAudioStreamPropertyAvailableVirtualFormats, kAudioStreamPropertyDirection, kAudioStreamPropertyIsActive, kAudioStreamPropertyLatency, kAudioStreamPropertyPhysicalFormat, kAudioStreamPropertyStartingChannel, kAudioStreamPropertyTerminalType, kAudioStreamPropertyVirtualFormat
 };
 
 // ---- Structs -------------
@@ -35,10 +45,26 @@ pub struct NeedQualifier<T>(T);
 /// Indicates a property still needs both an element and qualifier data
 pub struct NeedBoth<T>(T);
 
+/// A typed descriptor for a single CoreAudio property.
+///
+/// The type parameters encode everything the compiler needs to enforce correct
+/// usage:
+/// - `T` — the Rust type the property value deserialises to.
+/// - `Object` — which [`AudioObject`](crate::AudioObject) kind owns this property.
+/// - `Access` — [`ReadOnly`] or [`ReadWrite`]; gates `set_property`.
+/// - `L` — [`Listenable`] or [`Silent`]; gates `add_listener`.
+/// - `E` — readiness marker: [`NoExtra`] means the property is fully
+///   specified; [`NeedElement`], [`NeedQualifier`], and [`NeedBoth`] indicate
+///   that `.for_element()` or `.with_qualifier()` must be called first.
 pub struct Property<T, Object, Access, L, E> {
+    /// CoreAudio address (selector, scope, element).
     pub(crate) address: AudioObjectPropertyAddress,
+    /// Deserialises the raw byte buffer returned by CoreAudio into `T`.
     pub(crate) read: fn(&[u8]) -> Result<T, CoreAudioError>,
+    /// Serialises a value of type `T` into bytes for `AudioObjectSetPropertyData`.
+    /// `None` for read-only properties.
     pub(crate) encode: Option<fn(T) -> Vec<u8>>,
+    /// Optional qualifier bytes passed alongside the property address.
     pub(crate) qualifier: Option<Vec<u8>>,
     _object: PhantomData<Object>,
     _access: PhantomData<Access>,
@@ -47,6 +73,8 @@ pub struct Property<T, Object, Access, L, E> {
 }
 
 impl<T, Object, Access, L, E> Property<T, Object, Access, L, E> {
+    /// Constructs a `Property` from its address, read function, and optional
+    /// encode function. The qualifier starts as `None`.
     pub(crate) const fn new(
         address: AudioObjectPropertyAddress,
         read: fn(&[u8]) -> Result<T, CoreAudioError>,
@@ -66,6 +94,8 @@ impl<T, Object, Access, L, E> Property<T, Object, Access, L, E> {
 }
 
 // ---- Read functions (private) ----
+
+/// Reads a `CFStringRef` from `bytes` and converts it to a Rust `String`.
 fn read_string(bytes: &[u8]) -> Result<String, CoreAudioError> {
     if bytes.len() != size_of::<CFStringRef>() {
         return Err(CoreAudioError::from_error_kind(ErrorKind::CFStringConversion));
@@ -83,10 +113,12 @@ fn read_string(bytes: &[u8]) -> Result<String, CoreAudioError> {
     Ok(cf_string.to_string())
 }
 
+/// Encodes a `String` as raw bytes for use as a qualifier.
 pub(crate) fn encode_string(value: String) -> Vec<u8> {
     value.into()
 }
 
+/// Reads a `u32` from `bytes` and returns `true` if it is non-zero.
 fn read_bool(bytes: &[u8]) -> Result<bool, CoreAudioError> {
     let value = u32::from_ne_bytes(
         match bytes[..4].try_into() {
@@ -98,6 +130,7 @@ fn read_bool(bytes: &[u8]) -> Result<bool, CoreAudioError> {
     Ok(value)
 }
 
+/// Reads an `f64` from `bytes` in native byte order.
 fn read_f64(bytes: &[u8]) -> Result<f64, CoreAudioError> {
     let value = f64::from_ne_bytes(
         match bytes[..8].try_into() {
@@ -109,6 +142,7 @@ fn read_f64(bytes: &[u8]) -> Result<f64, CoreAudioError> {
     Ok(value)
 }
 
+/// Reads a `u32` from `bytes` in native byte order.
 fn read_u32(bytes: &[u8]) -> Result<u32, CoreAudioError> {
     let value = u32::from_ne_bytes(
         match bytes[..4].try_into() {
@@ -120,17 +154,7 @@ fn read_u32(bytes: &[u8]) -> Result<u32, CoreAudioError> {
     Ok(value)
 }
 
-fn read_i32(bytes: &[u8]) -> Result<i32, CoreAudioError> {
-    let value = i32::from_ne_bytes(
-        match bytes[..4].try_into() {
-            Ok(value) => value,
-            Err(_) => return Err(CoreAudioError::from_error_kind(ErrorKind::I32Conversion)),
-        }
-    );
-
-    Ok(value)
-}
-
+/// Reads a single `AudioObjectID` (`u32`) from `bytes`.
 fn read_audio_object_id(bytes: &[u8]) -> Result<AudioObjectID, CoreAudioError> {
     let value = u32::from_ne_bytes(
         match bytes[..4].try_into() {
@@ -142,6 +166,8 @@ fn read_audio_object_id(bytes: &[u8]) -> Result<AudioObjectID, CoreAudioError> {
     Ok(value)
 }
 
+/// Reads an `AudioStreamBasicDescription` from `bytes` and converts it to
+/// a [`StreamDescription`].
 fn read_stream_description(bytes: &[u8]) -> Result<StreamDescription, CoreAudioError> {
     if bytes.len() != size_of::<AudioStreamBasicDescription>() {
         return Err(CoreAudioError::from_error_kind(ErrorKind::StreamDescriptionConversion));
@@ -155,6 +181,8 @@ fn read_stream_description(bytes: &[u8]) -> Result<StreamDescription, CoreAudioE
         .map_err(|_| CoreAudioError::from_error_kind(ErrorKind::StreamDescriptionConversion))
 }
 
+/// Reads an `AudioValueRange` from `bytes` and converts it to a
+/// [`BufferFrameSizeRange`].
 fn read_buffer_size_range(bytes: &[u8]) -> Result<BufferFrameSizeRange, CoreAudioError> {
     if bytes.len() != size_of::<AudioValueRange>() {
         return Err(CoreAudioError::from_error_kind(ErrorKind::ValueRangeConversion));
@@ -167,6 +195,7 @@ fn read_buffer_size_range(bytes: &[u8]) -> Result<BufferFrameSizeRange, CoreAudi
     Ok(BufferFrameSizeRange::from(range))
 }
 
+/// Reads a packed array of `AudioObjectID` values from `bytes`.
 fn read_vec_audio_object_id(bytes: &[u8]) -> Result<Vec<AudioObjectID>, CoreAudioError> {
     if bytes.len() % size_of::<AudioObjectID>() != 0 {
         return Err(CoreAudioError::from_error_kind(ErrorKind::AudioObjectIdConversion));
@@ -177,6 +206,8 @@ fn read_vec_audio_object_id(bytes: &[u8]) -> Result<Vec<AudioObjectID>, CoreAudi
         .collect())
 }
 
+/// Reads a packed array of `AudioValueRange` values and converts each to a
+/// [`SampleRateRange`].
 fn read_vec_sample_rate_range(bytes: &[u8]) -> Result<Vec<SampleRateRange>, CoreAudioError> {
     if bytes.len() % size_of::<AudioValueRange>() != 0 {
         return Err(CoreAudioError::from_error_kind(ErrorKind::ValueRangeConversion));
@@ -189,6 +220,8 @@ fn read_vec_sample_rate_range(bytes: &[u8]) -> Result<Vec<SampleRateRange>, Core
         .collect())
 }
 
+/// Reads a packed array of `AudioStreamRangedDescription` values and converts
+/// each to a [`StreamRangedDescription`].
 fn read_vec_stream_ranged_description(bytes: &[u8]) -> Result<Vec<StreamRangedDescription>, CoreAudioError> {
     if bytes.len() % size_of::<AudioStreamRangedDescription>() != 0 {
         return Err(CoreAudioError::from_error_kind(ErrorKind::StreamDescriptionConversion));
@@ -203,31 +236,33 @@ fn read_vec_stream_ranged_description(bytes: &[u8]) -> Result<Vec<StreamRangedDe
     .collect())
 }
 
+/// Encodes an `f64` as native-endian bytes.
 fn encode_f64(value: f64) -> Vec<u8> {
     value.to_ne_bytes().to_vec()
 }
 
+/// Encodes a `u32` as native-endian bytes.
 pub(crate) fn encode_u32(value: u32) -> Vec<u8> {
     value.to_ne_bytes().to_vec()
 }
 
+/// Encodes a `Vec<u32>` as a packed array of native-endian bytes.
 pub(crate) fn encode_vec_u32(value: Vec<u32>) -> Vec<u8> {
     value.iter().flat_map(|n| n.to_ne_bytes()).collect()
 }
 
-
-fn encode_i32(value: i32) -> Vec<u8> {
-    value.to_ne_bytes().to_vec()
-}
-
+/// Encodes a `bool` as a `u32` (`0` or `1`) in native-endian bytes.
 fn encode_bool(value: bool) -> Vec<u8> {
     encode_u32(value as u32)
 }
 
+/// Encodes an `AudioObjectID` (`u32`) as native-endian bytes.
 fn encode_audio_object_id(value: AudioObjectID) -> Vec<u8> {
     encode_u32(value)
 }
 
+/// Serialises a [`StreamDescription`] into an `AudioStreamBasicDescription`
+/// and returns its raw bytes.
 fn encode_stream_description(value: StreamDescription) -> Vec<u8> {
     let asbd: AudioStreamBasicDescription = value.into();
     let size = size_of::<AudioStreamBasicDescription>();
@@ -238,6 +273,7 @@ fn encode_stream_description(value: StreamDescription) -> Vec<u8> {
     bytes
 }
 
+/// Reads an `f32` from `bytes` in native byte order.
 fn read_f32(bytes: &[u8]) -> Result<f32, CoreAudioError> {
     let value = f32::from_ne_bytes(
         match bytes[..4].try_into() {
@@ -249,10 +285,13 @@ fn read_f32(bytes: &[u8]) -> Result<f32, CoreAudioError> {
     Ok(value)
 }
 
+/// Encodes an `f32` as native-endian bytes.
 fn encode_f32(value: f32) -> Vec<u8> {
     value.to_ne_bytes().to_vec()
 }
 
+/// Reads two consecutive `u32` values from `bytes` and returns them as a
+/// [`ChannelPair`].
 fn read_channel_pair(bytes: &[u8]) -> Result<ChannelPair, CoreAudioError> {
     if bytes.len() < 8 {
         return Err(CoreAudioError::from_error_kind(ErrorKind::U32Conversion));
@@ -266,6 +305,7 @@ fn read_channel_pair(bytes: &[u8]) -> Result<ChannelPair, CoreAudioError> {
     Ok([a, b].into())
 }
 
+/// Serialises a [`ChannelPair`] as two consecutive native-endian `u32` values.
 fn encode_channel_pair(value: ChannelPair) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(8);
     bytes.extend_from_slice(&value.left().to_ne_bytes());
@@ -273,6 +313,7 @@ fn encode_channel_pair(value: ChannelPair) -> Vec<u8> {
     bytes
 }
 
+/// Reads an `AudioValueRange` from `bytes` and converts it to a [`DBRange`].
 fn read_db_range(bytes: &[u8]) -> Result<DBRange, CoreAudioError> {
     if bytes.len() != size_of::<AudioValueRange>() {
         return Err(CoreAudioError::from_error_kind(ErrorKind::ValueRangeConversion));
@@ -281,6 +322,7 @@ fn read_db_range(bytes: &[u8]) -> Result<DBRange, CoreAudioError> {
     Ok(unsafe { std::ptr::read(bytes.as_ptr() as *const AudioValueRange) }.into())
 }
 
+/// Reads an `i32` from `bytes` and converts it to a [`HogMode`].
 fn read_hog_mode(bytes: &[u8]) -> Result<HogMode, CoreAudioError> {
     if bytes.len() != size_of::<i32>() {
         return Err(CoreAudioError::from_error_kind(ErrorKind::HogModeConversion));
@@ -289,11 +331,13 @@ fn read_hog_mode(bytes: &[u8]) -> Result<HogMode, CoreAudioError> {
     Ok(unsafe { std::ptr::read(bytes.as_ptr() as *const i32) }.into())
 }
 
+/// Serialises a [`HogMode`] as a native-endian `i32`.
 fn encode_hog_mode(value: HogMode) -> Vec<u8> {
     let num: i32 = value.into();
     num.to_ne_bytes().to_vec()
 }
 
+/// Reads a `u32` from `bytes` and converts it to a [`Scope`].
 fn read_scope(bytes: &[u8]) -> Result<Scope, CoreAudioError> {
     if bytes.len() != size_of::<u32>() {
         return Err(CoreAudioError::from_error_kind(ErrorKind::ScopeConversion));
@@ -302,6 +346,7 @@ fn read_scope(bytes: &[u8]) -> Result<Scope, CoreAudioError> {
     unsafe { std::ptr::read(bytes.as_ptr() as *const u32) }.try_into()
 }
 
+/// Reads a `u32` from `bytes` and converts it to a [`PowerHint`].
 fn read_power_hint(bytes: &[u8]) -> Result<PowerHint, CoreAudioError> {
     if bytes.len() != size_of::<u32>() {
         return Err(CoreAudioError::from_error_kind(ErrorKind::PowerHintConversion));
@@ -310,6 +355,7 @@ fn read_power_hint(bytes: &[u8]) -> Result<PowerHint, CoreAudioError> {
     unsafe { std::ptr::read(bytes.as_ptr() as *const u32) }.try_into()
 }
 
+/// Reads a `u32` from `bytes` and converts it to a [`TerminalType`].
 fn read_terminal_type(bytes: &[u8]) -> Result<TerminalType, CoreAudioError> {
     if bytes.len() != size_of::<u32>() {
         return Err(CoreAudioError::from_error_kind(ErrorKind::PowerHintConversion));
@@ -318,6 +364,7 @@ fn read_terminal_type(bytes: &[u8]) -> Result<TerminalType, CoreAudioError> {
     Ok(unsafe { std::ptr::read(bytes.as_ptr() as *const u32) }.into())
 }
 
+/// Reads a `u32` from `bytes` and converts it to a [`TransportType`].
 fn read_transport_type(bytes: &[u8]) -> Result<TransportType, CoreAudioError> {
     if bytes.len() != size_of::<u32>() {
         return Err(CoreAudioError::from_error_kind(ErrorKind::PowerHintConversion));
@@ -326,12 +373,16 @@ fn read_transport_type(bytes: &[u8]) -> Result<TransportType, CoreAudioError> {
     Ok(unsafe { std::ptr::read(bytes.as_ptr() as *const u32) }.into())
 }
 
+/// Serialises a [`PowerHint`] as a native-endian `u32`.
 fn encode_power_hint(value: PowerHint) -> Vec<u8> {
     let num: u32 = value.into();
     num.to_ne_bytes().to_vec()
 }
 
 // ---- Helper ----
+
+/// Constructs an `AudioObjectPropertyAddress` with `mElement` set to
+/// `kAudioObjectPropertyElementMain`.
 const fn address(
     selector: AudioObjectPropertySelector,
     scope: AudioObjectPropertyScope,
