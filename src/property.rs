@@ -211,6 +211,11 @@ pub(crate) fn encode_u32(value: u32) -> Vec<u8> {
     value.to_ne_bytes().to_vec()
 }
 
+pub(crate) fn encode_vec_u32(value: Vec<u32>) -> Vec<u8> {
+    value.iter().flat_map(|n| n.to_ne_bytes()).collect()
+}
+
+
 fn encode_i32(value: i32) -> Vec<u8> {
     value.to_ne_bytes().to_vec()
 }

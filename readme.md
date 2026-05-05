@@ -207,9 +207,27 @@ The `FormatId` enum covers Linear PCM, AAC (Standard, HE, HEv2, LD, ELD, ELDv2, 
 ## Roadmap
 
 - **Sample rate validation** — `SampleRateRange` currently exposes raw min/max values. A future release will add a validation method that checks whether a given sample rate falls within a device's supported ranges and snaps to the nearest valid rate.
-- **Control properties** — Expose device-level controls such as volume, mute, stereo pan, and per-channel gain through the existing property system.
-- **More properties** — Expand coverage of the CoreAudio HAL property surface, including transport controls, clock source selection, and safety/alive offsets.
-- **Semantic newtypes for integer properties** — Properties like `SYSTEM_POWER_HINT`, `STREAM_DIRECTION`, and `DEVICE_HOG_MODE` currently return raw integer types. These will be replaced with dedicated enums or wrapper types that give the values meaningful names.
+- Dedicated `AudioObject<Clock>`,  `AudioObject<Box>`, and `AudioObject<Tap>` with unique methods
+
+## Breaking changes - v0.2.0
+- A lot of property rules have been updated to be more accurate
+- Function `.add_io_proc()` returns `&[AudioBuffer]` instead of `&mut [AudioBuffer]`<br>The data stored inside is still mutable
+- Dedicated methods for
+    - `.avaliable_sample_rates()`
+    - `.avaliable_buffer_sizes()`
+    - `.stream_virtual_format()`
+    - `stream_physical_format()`
+
+    have been removed in favour of them being accessed via `.get_property()`
+- Some properties now require calls to `.with_qualifier()` and / or `.for_element()`
+- Some properties now return wrapper types instead of the raw values but they all implement `.into()` or have dedicated reverse functions
+- Properties have a 5th type parameter instead of the previous 4
+
+## Disclaimer
+Apple's documentation on what properties can be listened to is pretty much non existant.
+Because of this, pretty much all writable properties have been made listenable and it will return an error if it turns out not to be.
+
+If you know of any documentation or if a specific property is incorrectly set, please make an issue in the repository and I will fix it at my earliest convenience.
 
 ## License
 

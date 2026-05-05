@@ -1,7 +1,7 @@
 //! # Traits
 
 // ---- Imports ------------
-use crate::{Device, Global, Property, Stream, System, property::{Listenable, NeedBoth, NeedElement, NeedQualifier, NoExtra, ReadWrite, encode_string, encode_u32}};
+use crate::{Device, Global, Property, Stream, System, property::{Listenable, NeedBoth, NeedElement, NeedQualifier, NoExtra, ReadWrite, encode_string, encode_u32, encode_vec_u32}};
 
 // ---- Traits ------------
 #[diagnostic::on_unimplemented(
@@ -58,6 +58,12 @@ pub trait IntoQualifierBytes {
 impl IntoQualifierBytes for u32 {
     fn into_bytes(self) -> Vec<u8> {
         encode_u32(self)
+    }
+}
+
+impl IntoQualifierBytes for Vec<u32> {
+    fn into_bytes(self) -> Vec<u8> {
+        encode_vec_u32(self)
     }
 }
 
