@@ -5,7 +5,7 @@
 // ---- Imports ------------
 use std::ops::RangeInclusive;
 use coreaudio_sys::{
-    AudioStreamBasicDescription, AudioStreamRangedDescription, AudioValueRange, kAudioFormatAC3, kAudioFormatAES3, kAudioFormatALaw, kAudioFormatAMR, kAudioFormatAMR_WB, kAudioFormatAPAC, kAudioFormatAppleLossless, kAudioFormatEnhancedAC3, kAudioFormatFlagIsBigEndian, kAudioFormatFlagIsFloat, kAudioFormatFlagIsNonInterleaved, kAudioFormatFlagIsNonMixable, kAudioFormatFlagIsPacked, kAudioFormatFlagIsSignedInteger, kAudioFormatLinearPCM, kAudioFormatMPEG4AAC, kAudioFormatMPEG4AAC_ELD, kAudioFormatMPEG4AAC_ELD_SBR, kAudioFormatMPEG4AAC_ELD_V2, kAudioFormatMPEG4AAC_HE, kAudioFormatMPEG4AAC_HE_V2, kAudioFormatMPEG4AAC_LD, kAudioFormatMPEG4AAC_Spatial, kAudioFormatMPEGLayer3, kAudioFormatOpus
+    AudioStreamBasicDescription, AudioStreamRangedDescription, AudioValueRange, kAudioDeviceTransportTypeAVB, kAudioDeviceTransportTypeAggregate, kAudioDeviceTransportTypeAirPlay, kAudioDeviceTransportTypeAutoAggregate, kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE, kAudioDeviceTransportTypeBuiltIn, kAudioDeviceTransportTypeContinuityCapture, kAudioDeviceTransportTypeContinuityCaptureWired, kAudioDeviceTransportTypeContinuityCaptureWireless, kAudioDeviceTransportTypeDisplayPort, kAudioDeviceTransportTypeFireWire, kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypePCI, kAudioDeviceTransportTypeThunderbolt, kAudioDeviceTransportTypeUSB, kAudioDeviceTransportTypeVirtual, kAudioFormatAC3, kAudioFormatAES3, kAudioFormatALaw, kAudioFormatAMR, kAudioFormatAMR_WB, kAudioFormatAPAC, kAudioFormatAppleLossless, kAudioFormatEnhancedAC3, kAudioFormatFlagIsBigEndian, kAudioFormatFlagIsFloat, kAudioFormatFlagIsNonInterleaved, kAudioFormatFlagIsNonMixable, kAudioFormatFlagIsPacked, kAudioFormatFlagIsSignedInteger, kAudioFormatLinearPCM, kAudioFormatMPEG4AAC, kAudioFormatMPEG4AAC_ELD, kAudioFormatMPEG4AAC_ELD_SBR, kAudioFormatMPEG4AAC_ELD_V2, kAudioFormatMPEG4AAC_HE, kAudioFormatMPEG4AAC_HE_V2, kAudioFormatMPEG4AAC_LD, kAudioFormatMPEG4AAC_Spatial, kAudioFormatMPEGLayer3, kAudioFormatOpus, kAudioStreamTerminalTypeDigitalAudioInterface, kAudioStreamTerminalTypeDisplayPort, kAudioStreamTerminalTypeHDMI, kAudioStreamTerminalTypeHeadphones, kAudioStreamTerminalTypeHeadsetMicrophone, kAudioStreamTerminalTypeLFESpeaker, kAudioStreamTerminalTypeLine, kAudioStreamTerminalTypeMicrophone, kAudioStreamTerminalTypeReceiverMicrophone, kAudioStreamTerminalTypeReceiverSpeaker, kAudioStreamTerminalTypeSpeaker, kAudioStreamTerminalTypeTTY
 };
 use num_traits::AsPrimitive;
 use crate::errors::{CoreAudioError, ErrorKind};
@@ -16,6 +16,7 @@ const I24_MAX: i32 = 2i32.pow(24 - 1) - 1;
 
 // ---- Enums ------------
 /// Input or output device selector
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scope {
     /// Input devices
     Input,
@@ -35,14 +36,14 @@ impl TryFrom<u32> for Scope {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SampleEncoding {
     Float,
     SignedInt,
     UnSignedInt,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HogMode {
     Released,
     Owned(i32),
@@ -66,7 +67,7 @@ impl Into<i32> for HogMode {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PowerHint {
     None,
     PowerSaving,
@@ -93,7 +94,94 @@ impl Into<u32> for PowerHint {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransportType {
+    BuiltIn,
+    Aggregate,
+    AutoAggregate,
+    Virtual,
+    PCIE,
+    USB,
+    FireWire,
+    Bluetooth,
+    BluetoothLE,
+    HDMI,
+    DisplayPort,
+    AirPlay,
+    AVB,
+    Thunderbolt,
+    ContinuityCapture,
+    ContinuityCaptureWired,
+    ContinuityCaptureWireless,
+    Unknown(u32),
+}
+
+impl From<u32> for TransportType {
+    #[allow(non_upper_case_globals)]
+    fn from(value: u32) -> Self {
+        match value {
+            kAudioDeviceTransportTypeBuiltIn => Self::BuiltIn,
+            kAudioDeviceTransportTypeAggregate => Self::Aggregate,
+            kAudioDeviceTransportTypeAutoAggregate => Self::AutoAggregate,
+            kAudioDeviceTransportTypeVirtual => Self::Virtual,
+            kAudioDeviceTransportTypePCI => Self::PCIE,
+            kAudioDeviceTransportTypeUSB => Self::USB,
+            kAudioDeviceTransportTypeFireWire => Self::FireWire,
+            kAudioDeviceTransportTypeBluetooth => Self::Bluetooth,
+            kAudioDeviceTransportTypeBluetoothLE => Self::BluetoothLE,
+            kAudioDeviceTransportTypeHDMI => Self::HDMI,
+            kAudioDeviceTransportTypeDisplayPort => Self::DisplayPort,
+            kAudioDeviceTransportTypeAirPlay => Self::AirPlay,
+            kAudioDeviceTransportTypeAVB => Self::AVB,
+            kAudioDeviceTransportTypeThunderbolt => Self::Thunderbolt,
+            kAudioDeviceTransportTypeContinuityCapture => Self::ContinuityCapture,
+            kAudioDeviceTransportTypeContinuityCaptureWired => Self::ContinuityCaptureWired,
+            kAudioDeviceTransportTypeContinuityCaptureWireless => Self::ContinuityCaptureWireless,
+            id => Self::Unknown(id),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalType {
+    Line,
+    DigitalAudioInterface,
+    Speaker,
+    Headphones,
+    LFESpeaker,
+    ReceiverSpeaker,
+    Microphone,
+    HeadsetMicrophone,
+    ReceiverMicrophone,
+    TTY,
+    HDMI,
+    DisplayPort,
+    Unknown(u32),
+}
+
+#[allow(non_upper_case_globals)]
+impl From<u32> for TerminalType {
+    fn from(value: u32) -> Self {
+        match value {
+            kAudioStreamTerminalTypeLine => Self::Line,
+            kAudioStreamTerminalTypeDigitalAudioInterface => Self::DigitalAudioInterface,
+            kAudioStreamTerminalTypeSpeaker => Self::Speaker,
+            kAudioStreamTerminalTypeHeadphones => Self::Headphones,
+            kAudioStreamTerminalTypeLFESpeaker => Self::LFESpeaker,
+            kAudioStreamTerminalTypeReceiverSpeaker => Self::ReceiverSpeaker,
+            kAudioStreamTerminalTypeMicrophone => Self::Microphone,
+            kAudioStreamTerminalTypeHeadsetMicrophone => Self::HeadsetMicrophone,
+            kAudioStreamTerminalTypeReceiverMicrophone => Self::ReceiverMicrophone,
+            kAudioStreamTerminalTypeTTY => Self::TTY,
+            kAudioStreamTerminalTypeHDMI => Self::HDMI,
+            kAudioStreamTerminalTypeDisplayPort => Self::DisplayPort,
+            id => Self::Unknown(id),
+        }
+    }
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SampleFormat {
 // Unsigned
     U8,
@@ -155,7 +243,7 @@ impl SampleFormat {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AACFormat {
     Standard,
     ELD,

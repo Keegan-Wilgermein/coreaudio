@@ -3,7 +3,7 @@
 #![allow(unsafe_code)]
 
 // ----- Imports ------------
-use crate::{Scope, data_types::{BufferFrameSizeRange, ChannelPair, DBRange, HogMode, PowerHint, SampleRateRange, StreamDescription, StreamRangedDescription}, errors::{CoreAudioError, ErrorKind}, object::{Device, Global, Stream, System}};
+use crate::{Scope, data_types::{BufferFrameSizeRange, ChannelPair, DBRange, HogMode, PowerHint, SampleRateRange, StreamDescription, StreamRangedDescription, TerminalType, TransportType}, errors::{CoreAudioError, ErrorKind}, object::{Device, Global, Stream, System}};
 use std::marker::PhantomData;
 use core_foundation::{base::TCFType, string::{CFString, CFStringRef}};
 use coreaudio_sys::{
@@ -299,6 +299,22 @@ fn read_power_hint(bytes: &[u8]) -> Result<PowerHint, CoreAudioError> {
     }
 
     unsafe { std::ptr::read(bytes.as_ptr() as *const u32) }.try_into()
+}
+
+fn read_terminal_type(bytes: &[u8]) -> Result<TerminalType, CoreAudioError> {
+    if bytes.len() != size_of::<u32>() {
+        return Err(CoreAudioError::from_error_kind(ErrorKind::PowerHintConversion));
+    }
+
+    Ok(unsafe { std::ptr::read(bytes.as_ptr() as *const u32) }.into())
+}
+
+fn read_transport_type(bytes: &[u8]) -> Result<TransportType, CoreAudioError> {
+    if bytes.len() != size_of::<u32>() {
+        return Err(CoreAudioError::from_error_kind(ErrorKind::PowerHintConversion));
+    }
+
+    Ok(unsafe { std::ptr::read(bytes.as_ptr() as *const u32) }.into())
 }
 
 fn encode_power_hint(value: PowerHint) -> Vec<u8> {
@@ -692,13 +708,13 @@ Property::new(
 /// Matches one of the `kAudioDeviceTransportType*` constants — e.g. USB,
 /// FireWire, Bluetooth, PCI, or Built-In. Useful for filtering devices by
 /// connection type or adjusting latency expectations.
-pub const DEVICE_TRANSPORT_TYPE: Property<u32, Device, ReadOnly, Silent, NoExtra> =
+pub const DEVICE_TRANSPORT_TYPE: Property<TransportType, Device, ReadOnly, Silent, NoExtra> =
 Property::new(
     address(
         kAudioDevicePropertyTransportType,
         kAudioObjectPropertyScopeGlobal
     ),
-    read_u32,
+    read_transport_type,
     None,
 );
 
@@ -1470,13 +1486,13 @@ Property::new(
 /// `kAudioStreamTerminalTypeMicrophone`, `kAudioStreamTerminalTypeHeadphones`,
 /// or `kAudioStreamTerminalTypeSpeaker`. Useful for choosing an appropriate
 /// icon or routing hint in UI.
-pub const TERMINAL_TYPE: Property<u32, Stream, ReadOnly, Silent, NoExtra> =
+pub const TERMINAL_TYPE: Property<TerminalType, Stream, ReadOnly, Silent, NoExtra> =
 Property::new(
     address(
         kAudioStreamPropertyTerminalType,
         kAudioObjectPropertyScopeGlobal,
     ),
-    read_u32,
+    read_terminal_type,
     None,
 );
 
