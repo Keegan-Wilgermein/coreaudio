@@ -402,7 +402,7 @@ Property::new(
 // ---- Device constants ----
 
 /// Human readable name of the device
-pub const DEVICE_NAME: Property<String, Device, ReadOnly, Silent, NoExtra> =
+pub const DEVICE_NAME: Property<String, Device, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioObjectPropertyName,
@@ -459,7 +459,7 @@ Property::new(
 );
 
 /// All sample rates supported by the device
-pub const DEVICE_AVAILABLE_SAMPLE_RATES: Property<Vec<SampleRateRange>, Device, ReadOnly, Silent, NoExtra> =
+pub const DEVICE_AVAILABLE_SAMPLE_RATES: Property<Vec<SampleRateRange>, Device, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioDevicePropertyAvailableNominalSampleRates,
@@ -704,7 +704,7 @@ Property::new(
 );
 
 /// The volume as a linear scalar for the given scope and element
-pub const DEVICE_VOLUME_SCALAR: Property<f32, Device, ReadWrite, Silent, NeedElement> =
+pub const DEVICE_VOLUME_SCALAR: Property<f32, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertyVolumeScalar,
@@ -715,7 +715,7 @@ Property::new(
 );
 
 /// The volume in dB for the given scope and element
-pub const DEVICE_VOLUME_DECIBELS: Property<f32, Device, ReadWrite, Silent, NeedElement> =
+pub const DEVICE_VOLUME_DECIBELS: Property<f32, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertyVolumeDecibels,
@@ -759,7 +759,7 @@ Property::new(
 );
 
 /// The stereo pan position (0.0 = full left, 1.0 = full right)
-pub const DEVICE_STEREO_PAN: Property<f32, Device, ReadWrite, Silent, NeedElement> =
+pub const DEVICE_STEREO_PAN: Property<f32, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertyStereoPan,
@@ -781,7 +781,7 @@ Property::new(
 );
 
 /// Whether the given element is muted for the given scope
-pub const DEVICE_MUTE: Property<bool, Device, ReadWrite, Silent, NeedElement> =
+pub const DEVICE_MUTE: Property<bool, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertyMute,
@@ -792,7 +792,7 @@ Property::new(
 );
 
 /// Whether the given element is soloed for the given scope
-pub const DEVICE_SOLO: Property<bool, Device, ReadWrite, Silent, NeedElement> =
+pub const DEVICE_SOLO: Property<bool, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertySolo,
@@ -803,7 +803,7 @@ Property::new(
 );
 
 /// Whether phantom power is enabled for the given element
-pub const DEVICE_PHANTOM_POWER: Property<bool, Device, ReadWrite, Silent, NeedElement> =
+pub const DEVICE_PHANTOM_POWER: Property<bool, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertyPhantomPower,
@@ -814,7 +814,7 @@ Property::new(
 );
 
 /// Whether the signal phase is inverted for the given element
-pub const DEVICE_PHASE_INVERT: Property<bool, Device, ReadWrite, Silent, NeedElement> =
+pub const DEVICE_PHASE_INVERT: Property<bool, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertyPhaseInvert,
@@ -825,7 +825,7 @@ Property::new(
 );
 
 /// Whether the clip light is currently lit
-pub const DEVICE_CLIP_LIGHT: Property<bool, Device, ReadWrite, Silent, NeedElement> =
+pub const DEVICE_CLIP_LIGHT: Property<bool, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertyClipLight,
@@ -836,7 +836,7 @@ Property::new(
 );
 
 /// Whether talkback is enabled
-pub const DEVICE_TALKBACK: Property<bool, Device, ReadWrite, Silent, NeedElement> =
+pub const DEVICE_TALKBACK: Property<bool, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertyTalkback,
@@ -847,7 +847,7 @@ Property::new(
 );
 
 /// Whether listenback is enabled
-pub const DEVICE_LISTENBACK: Property<bool, Device, ReadWrite, Silent, NeedElement> =
+pub const DEVICE_LISTENBACK: Property<bool, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertyListenback,
@@ -858,7 +858,7 @@ Property::new(
 );
 
 /// Whether a jack is connected to the given scope and element
-pub const DEVICE_JACK_IS_CONNECTED: Property<bool, Device, ReadOnly, Silent, NeedElement> =
+pub const DEVICE_JACK_IS_CONNECTED: Property<bool, Device, ReadOnly, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertyJackIsConnected,
@@ -869,7 +869,7 @@ Property::new(
 );
 
 /// The ID of the currently selected data source for the given scope
-pub const DEVICE_DATA_SOURCE: Property<u32, Device, ReadWrite, Silent, NeedElement> =
+pub const DEVICE_DATA_SOURCE: Property<u32, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertyDataSource,
@@ -902,7 +902,7 @@ Property::new(
 );
 
 /// The ID of the currently selected clock source
-pub const DEVICE_CLOCK_SOURCE: Property<u32, Device, ReadWrite, Silent, NoExtra> =
+pub const DEVICE_CLOCK_SOURCE: Property<u32, Device, ReadWrite, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioDevicePropertyClockSource,
@@ -935,7 +935,7 @@ Property::new(
 );
 
 /// The ID of the currently selected play-through destination
-pub const DEVICE_PLAY_THRU_DESTINATION: Property<u32, Device, ReadWrite, Silent, NoExtra> =
+pub const DEVICE_PLAY_THRU_DESTINATION: Property<u32, Device, ReadWrite, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioDevicePropertyPlayThruDestination,
@@ -968,7 +968,7 @@ Property::new(
 );
 
 /// The ID of the nominal line level for the given channel
-pub const DEVICE_CHANNEL_NOMINAL_LINE_LEVEL: Property<u32, Device, ReadWrite, Silent, NeedElement> =
+pub const DEVICE_CHANNEL_NOMINAL_LINE_LEVEL: Property<u32, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertyChannelNominalLineLevel,
@@ -1001,7 +1001,7 @@ Property::new(
 );
 
 /// The ID of the current high-pass filter setting
-pub const DEVICE_HIGH_PASS_FILTER_SETTING: Property<u32, Device, ReadWrite, Silent, NeedElement> =
+pub const DEVICE_HIGH_PASS_FILTER_SETTING: Property<u32, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertyHighPassFilterSetting,
@@ -1034,7 +1034,7 @@ Property::new(
 );
 
 /// The LFE channel volume as a linear scalar
-pub const DEVICE_SUB_VOLUME_SCALAR: Property<f32, Device, ReadWrite, Silent, NeedElement> =
+pub const DEVICE_SUB_VOLUME_SCALAR: Property<f32, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertySubVolumeScalar,
@@ -1045,7 +1045,7 @@ Property::new(
 );
 
 /// The LFE channel volume in dB
-pub const DEVICE_SUB_VOLUME_DECIBELS: Property<f32, Device, ReadWrite, Silent, NeedElement> =
+pub const DEVICE_SUB_VOLUME_DECIBELS: Property<f32, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertySubVolumeDecibels,
@@ -1089,7 +1089,7 @@ Property::new(
 );
 
 /// Whether the LFE channel is muted
-pub const DEVICE_SUB_MUTE: Property<bool, Device, ReadWrite, Silent, NeedElement> =
+pub const DEVICE_SUB_MUTE: Property<bool, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertySubMute,
@@ -1102,7 +1102,7 @@ Property::new(
 // ---- Stream constants ----
 
 /// Human readable name of the stream
-pub const STREAM_NAME: Property<String, Stream, ReadOnly, Silent, NoExtra> =
+pub const STREAM_NAME: Property<String, Stream, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioObjectPropertyName,
@@ -1179,7 +1179,7 @@ Property::new(
 );
 
 /// All data formats the stream can present to clients, each with a sample rate range
-pub const STREAM_AVAILABLE_VIRTUAL_FORMATS: Property<Vec<StreamRangedDescription>, Stream, ReadOnly, Silent, NoExtra> =
+pub const STREAM_AVAILABLE_VIRTUAL_FORMATS: Property<Vec<StreamRangedDescription>, Stream, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioStreamPropertyAvailableVirtualFormats,
@@ -1190,7 +1190,7 @@ Property::new(
 );
 
 /// All data formats the hardware actually supports, each with a sample rate range
-pub const STREAM_AVAILABLE_PHYSICAL_FORMATS: Property<Vec<StreamRangedDescription>, Stream, ReadOnly, Silent, NoExtra> =
+pub const STREAM_AVAILABLE_PHYSICAL_FORMATS: Property<Vec<StreamRangedDescription>, Stream, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioStreamPropertyAvailablePhysicalFormats,
@@ -1201,7 +1201,7 @@ Property::new(
 );
 
 /// Latency of the stream in frames
-pub const STREAM_LATENCY: Property<u32, Stream, ReadOnly, Silent, NoExtra> =
+pub const STREAM_LATENCY: Property<u32, Stream, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioStreamPropertyLatency,
@@ -1301,7 +1301,7 @@ Property::new(
 );
 
 /// All HAL plugins currently loaded
-pub const SYSTEM_PLUGIN_LIST: Property<Vec<AudioObjectID>, System, ReadOnly, Silent, NoExtra> =
+pub const SYSTEM_PLUGIN_LIST: Property<Vec<AudioObjectID>, System, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioHardwarePropertyPlugInList,
@@ -1434,7 +1434,7 @@ Property::new(
 );
 
 /// Writing any value triggers a user-ID-changed notification
-pub const SYSTEM_USER_ID_CHANGED: Property<u32, System, ReadWrite, Silent, NoExtra> =
+pub const SYSTEM_USER_ID_CHANGED: Property<u32, System, ReadWrite, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioHardwarePropertyUserIDChanged,
@@ -1445,7 +1445,7 @@ Property::new(
 );
 
 /// Whether audio from this process is audible (not muted at the system level)
-pub const SYSTEM_PROCESS_IS_AUDIBLE: Property<bool, System, ReadWrite, Silent, NoExtra> =
+pub const SYSTEM_PROCESS_IS_AUDIBLE: Property<bool, System, ReadWrite, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioHardwarePropertyProcessIsAudible,
@@ -1478,7 +1478,7 @@ Property::new(
 );
 
 /// Whether the current user session is active or the system is running headless
-pub const SYSTEM_USER_SESSION_IS_ACTIVE_OR_HEADLESS: Property<bool, System, ReadOnly, Silent, NoExtra> =
+pub const SYSTEM_USER_SESSION_IS_ACTIVE_OR_HEADLESS: Property<bool, System, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioHardwarePropertyUserSessionIsActiveOrHeadless,
