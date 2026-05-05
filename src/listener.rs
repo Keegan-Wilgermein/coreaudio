@@ -3,9 +3,9 @@
 #![allow(unsafe_code)]
 
 // ---- Imports --------
-use std::{ffi::c_void, sync::mpsc::{self, Receiver, RecvTimeoutError, Sender}, time::Duration};
+use std::{ffi::c_void, marker::PhantomData, sync::mpsc::{self, Receiver, RecvTimeoutError, Sender}, time::Duration};
 use coreaudio_sys::{AudioObjectAddPropertyListener, AudioObjectID, AudioObjectPropertyAddress, AudioObjectRemovePropertyListener, OSStatus};
-use crate::{errors::{CoreAudioError, ErrorKind, OSStatusCheck}, object::get_property_internal};
+use crate::{Property, errors::{CoreAudioError, ErrorKind, OSStatusCheck}, object::get_property_internal, property::{Listenable, NoExtra}};
 
 // ---- Structs ------------
 struct ClientCallbackData<T> {
@@ -19,27 +19,29 @@ impl<T> ClientCallbackData<T> {
     }
 }
 
-pub struct PropertyListener<T> {
+pub struct PropertyListener<T, D, A> {
     id: AudioObjectID,
     address: AudioObjectPropertyAddress,
     callback_client_data: ClientCallbackData<T>,
     receiver: Receiver<T>,
+    _device: PhantomData<D>,
+    _access: PhantomData<A>,
 }
 
-impl<T> Drop for PropertyListener<T> {
+impl<T, D, A> Drop for PropertyListener<T, D, A> {
     fn drop(&mut self) {
         unsafe {
             AudioObjectRemovePropertyListener(
                 self.id,
                 &self.address,
-                Some(io_callback::<T>),
+                Some(io_callback::<T, D, A>),
                 self.callback_client_data.as_c_void(),
             );
         }
     }
 }
 
-impl<T> PropertyListener<T> {
+impl<T, D, A> PropertyListener<T, D, A> {
     pub(crate) fn try_new(
         id: AudioObjectID,
         address: AudioObjectPropertyAddress,
@@ -58,7 +60,7 @@ impl<T> PropertyListener<T> {
             AudioObjectAddPropertyListener(
                 id,
                 &address,
-                Some(io_callback::<T>),
+                Some(io_callback::<T, D, A>),
                 callback_data_ptr,
             ).check()?;
         };
@@ -69,6 +71,8 @@ impl<T> PropertyListener<T> {
                 address,
                 callback_client_data,
                 receiver,
+                _device: PhantomData,
+                _access: PhantomData,
             }
         )
     }
@@ -110,7 +114,7 @@ impl<T> PropertyListener<T> {
 }
 
 // ---- Functions ------------
-unsafe extern "C" fn io_callback<T>(
+unsafe extern "C" fn io_callback<T, D, A>(
     device_id: u32,
     _queue: u32,
     address: *const AudioObjectPropertyAddress,
@@ -120,7 +124,13 @@ unsafe extern "C" fn io_callback<T>(
         &*(client_data as *mut ClientCallbackData<T>)
     };
 
-    let data = match get_property_internal(device_id, unsafe { *address }, client_data.read, None) {
+    let property: Property<T, D, A, Listenable, NoExtra> = Property::new(
+        unsafe { *address },
+        client_data.read,
+        None,
+    );
+
+    let data = match get_property_internal(device_id, property) {
         Ok(data) => data,
         Err(error) => return error.code(),
     };

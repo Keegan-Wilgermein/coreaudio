@@ -54,7 +54,7 @@ pub(crate) trait HasAllData {}
 impl HasAllData for NoExtra {}
 
 /// Method to add qualifier data to property
-trait IntoQualifierBytes {
+pub(crate) trait IntoQualifierBytes {
     fn into_bytes(self) -> Vec<u8>;
 }
 
@@ -89,7 +89,6 @@ impl<V, D, A, L, T> MissingQualifier<T> for Property<V, D, A, L, NeedQualifier<T
             self.encode,
         );
 
-        new.element = self.element;
         new.qualifier = Some(qualifier.into_bytes());
         new
     }
@@ -109,7 +108,6 @@ impl<V, D, A, L, T> MissingQualifier<T> for Property<V, D, A, L, NeedBoth<T>> {
             self.encode,
         );
 
-        new.element = self.element;
         new.qualifier = Some(qualifier.into_bytes());
         new
     }
@@ -134,9 +132,9 @@ impl<V, D, A, L> MissingElement for Property<V, D, A, L, NeedElement> {
             self.read,
             self.encode,
         );
+        new.address.mElement = element;
 
         new.qualifier = self.qualifier;
-        new.element = element;
         new
     }
 }
@@ -150,9 +148,9 @@ impl<V, D, A, L, T> MissingElement for Property<V, D, A, L, NeedBoth<T>> {
             self.read,
             self.encode,
         );
-
+        new.address.mElement = element;
+        
         new.qualifier = self.qualifier;
-        new.element = element;
         new
     }
 }

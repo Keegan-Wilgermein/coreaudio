@@ -133,10 +133,11 @@ impl AudioObject<System> {
     pub fn add_listener<V, D, A, L, E>(
         &self,
         property: Property<V, D, A, L, E>,
-    ) -> Result<PropertyListener<V>, CoreAudioError>
+    ) -> Result<PropertyListener<V, D, A>, CoreAudioError>
     where
         D: ObjectCompatibleWith<System>,
         L: CanListen,
+        E: HasAllData,
     {
         add_listener_internal(self.id, property)
     }
@@ -205,10 +206,11 @@ impl AudioObject<Device> {
     pub fn add_listener<V, D, A, L, E>(
         &self,
         property: Property<V, D, A, L, E>,
-    ) -> Result<PropertyListener<V>, CoreAudioError>
+    ) -> Result<PropertyListener<V, D, A>, CoreAudioError>
     where
         D: ObjectCompatibleWith<Device>,
         L: CanListen,
+        E: HasAllData,
     {
         add_listener_internal(self.id, property)
     }
@@ -256,10 +258,11 @@ impl AudioObject<Stream> {
     pub fn add_listener<V, D, A, L, E>(
         &self,
         property: Property<V, D, A, L, E>,
-    ) -> Result<PropertyListener<V>, CoreAudioError>
+    ) -> Result<PropertyListener<V, D, A>, CoreAudioError>
     where
         D: ObjectCompatibleWith<Stream>,
         L: CanListen,
+        E: HasAllData,
     {
         add_listener_internal(self.id, property)
     }
@@ -338,6 +341,6 @@ fn set_property_internal<V, D, A, L, E>(
 fn add_listener_internal<V, D, A, L, E>(
     id: AudioObjectID,
     property: Property<V, D, A, L, E>,
-) -> Result<PropertyListener<V>, CoreAudioError> {
+) -> Result<PropertyListener<V, D, A>, CoreAudioError> {
     PropertyListener::try_new(id, property.address, property.read)
 }

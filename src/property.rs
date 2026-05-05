@@ -7,7 +7,7 @@ use crate::{data_types::{BufferFrameSizeRange, SampleRateRange, StreamDescriptio
 use std::marker::PhantomData;
 use core_foundation::{base::TCFType, string::{CFString, CFStringRef}};
 use coreaudio_sys::{
-    AudioChannelLayout, AudioObjectID, AudioObjectPropertyAddress, AudioObjectPropertyScope, AudioObjectPropertySelector, AudioStreamBasicDescription, AudioStreamRangedDescription, AudioValueRange, CFURLRef, kAudioDeviceProcessorOverload, kAudioDevicePropertyAvailableNominalSampleRates, kAudioDevicePropertyBufferFrameSize, kAudioDevicePropertyBufferFrameSizeRange, kAudioDevicePropertyChannelNominalLineLevel, kAudioDevicePropertyChannelNominalLineLevelNameForIDCFString, kAudioDevicePropertyChannelNominalLineLevels, kAudioDevicePropertyClipLight, kAudioDevicePropertyClockDomain, kAudioDevicePropertyClockSource, kAudioDevicePropertyClockSourceNameForIDCFString, kAudioDevicePropertyClockSources, kAudioDevicePropertyConfigurationApplication, kAudioDevicePropertyDataSource, kAudioDevicePropertyDataSourceNameForIDCFString, kAudioDevicePropertyDataSources, kAudioDevicePropertyDeviceCanBeDefaultDevice, kAudioDevicePropertyDeviceCanBeDefaultSystemDevice, kAudioDevicePropertyDeviceIsAlive, kAudioDevicePropertyDeviceIsRunning, kAudioDevicePropertyDeviceUID, kAudioDevicePropertyHighPassFilterSetting, kAudioDevicePropertyHighPassFilterSettingNameForIDCFString, kAudioDevicePropertyHighPassFilterSettings, kAudioDevicePropertyHogMode, kAudioDevicePropertyIOCycleUsage, kAudioDevicePropertyIOStoppedAbnormally, kAudioDevicePropertyIcon, kAudioDevicePropertyIsHidden, kAudioDevicePropertyJackIsConnected, kAudioDevicePropertyLatency, kAudioDevicePropertyListenback, kAudioDevicePropertyModelUID, kAudioDevicePropertyMute, kAudioDevicePropertyNominalSampleRate, kAudioDevicePropertyPhantomPower, kAudioDevicePropertyPhaseInvert, kAudioDevicePropertyPlayThruDestination, kAudioDevicePropertyPlayThruDestinationNameForIDCFString, kAudioDevicePropertyPlayThruDestinations, kAudioDevicePropertyPreferredChannelLayout, kAudioDevicePropertyPreferredChannelsForStereo, kAudioDevicePropertyRelatedDevices, kAudioDevicePropertySafetyOffset, kAudioDevicePropertySolo, kAudioDevicePropertyStereoPan, kAudioDevicePropertyStereoPanChannels, kAudioDevicePropertyStreams, kAudioDevicePropertySubMute, kAudioDevicePropertySubVolumeDecibels, kAudioDevicePropertySubVolumeDecibelsToScalar, kAudioDevicePropertySubVolumeRangeDecibels, kAudioDevicePropertySubVolumeScalar, kAudioDevicePropertySubVolumeScalarToDecibels, kAudioDevicePropertyTalkback, kAudioDevicePropertyTransportType, kAudioDevicePropertyUsesVariableBufferFrameSizes, kAudioDevicePropertyVolumeDecibels, kAudioDevicePropertyVolumeDecibelsToScalar, kAudioDevicePropertyVolumeRangeDecibels, kAudioDevicePropertyVolumeScalar, kAudioDevicePropertyVolumeScalarToDecibels, kAudioHardwarePropertyBoxList, kAudioHardwarePropertyClockDeviceList, kAudioHardwarePropertyDefaultInputDevice, kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDefaultSystemOutputDevice, kAudioHardwarePropertyDevices, kAudioHardwarePropertyHogModeIsAllowed, kAudioHardwarePropertyIsInitingOrExiting, kAudioHardwarePropertyMixStereoToMono, kAudioHardwarePropertyPlugInList, kAudioHardwarePropertyPowerHint, kAudioHardwarePropertyProcessIsAudible, kAudioHardwarePropertyProcessIsMaster, kAudioHardwarePropertyServiceRestarted, kAudioHardwarePropertySleepingIsAllowed, kAudioHardwarePropertyTapList, kAudioHardwarePropertyTranslateBundleIDToPlugIn, kAudioHardwarePropertyTranslateBundleIDToTransportManager, kAudioHardwarePropertyTranslateUIDToBox, kAudioHardwarePropertyTranslateUIDToClockDevice, kAudioHardwarePropertyTranslateUIDToDevice, kAudioHardwarePropertyTransportManagerList, kAudioHardwarePropertyUnloadingIsAllowed, kAudioHardwarePropertyUserIDChanged, kAudioHardwarePropertyUserSessionIsActiveOrHeadless, kAudioObjectPropertyBaseClass, kAudioObjectPropertyClass, kAudioObjectPropertyCreator, kAudioObjectPropertyElementCategoryName, kAudioObjectPropertyElementMain, kAudioObjectPropertyElementName, kAudioObjectPropertyElementNumberName, kAudioObjectPropertyManufacturer, kAudioObjectPropertyModelName, kAudioObjectPropertyName, kAudioObjectPropertyOwnedObjects, kAudioObjectPropertyOwner, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyScopeInput, kAudioObjectPropertyScopeOutput, kAudioStreamPropertyAvailablePhysicalFormats, kAudioStreamPropertyAvailableVirtualFormats, kAudioStreamPropertyDirection, kAudioStreamPropertyIsActive, kAudioStreamPropertyLatency, kAudioStreamPropertyPhysicalFormat, kAudioStreamPropertyStartingChannel, kAudioStreamPropertyTerminalType, kAudioStreamPropertyVirtualFormat
+    AudioChannelLayout, AudioObjectID, AudioObjectPropertyAddress, AudioObjectPropertyScope, AudioObjectPropertySelector, AudioStreamBasicDescription, AudioStreamRangedDescription, AudioValueRange, kAudioDeviceProcessorOverload, kAudioDevicePropertyAvailableNominalSampleRates, kAudioDevicePropertyBufferFrameSize, kAudioDevicePropertyBufferFrameSizeRange, kAudioDevicePropertyChannelNominalLineLevel, kAudioDevicePropertyChannelNominalLineLevelNameForIDCFString, kAudioDevicePropertyChannelNominalLineLevels, kAudioDevicePropertyClipLight, kAudioDevicePropertyClockDomain, kAudioDevicePropertyClockSource, kAudioDevicePropertyClockSourceNameForIDCFString, kAudioDevicePropertyClockSources, kAudioDevicePropertyConfigurationApplication, kAudioDevicePropertyDataSource, kAudioDevicePropertyDataSourceNameForIDCFString, kAudioDevicePropertyDataSources, kAudioDevicePropertyDeviceCanBeDefaultDevice, kAudioDevicePropertyDeviceCanBeDefaultSystemDevice, kAudioDevicePropertyDeviceIsAlive, kAudioDevicePropertyDeviceIsRunning, kAudioDevicePropertyDeviceUID, kAudioDevicePropertyHighPassFilterSetting, kAudioDevicePropertyHighPassFilterSettingNameForIDCFString, kAudioDevicePropertyHighPassFilterSettings, kAudioDevicePropertyHogMode, kAudioDevicePropertyIOCycleUsage, kAudioDevicePropertyIOStoppedAbnormally, kAudioDevicePropertyIcon, kAudioDevicePropertyIsHidden, kAudioDevicePropertyJackIsConnected, kAudioDevicePropertyLatency, kAudioDevicePropertyListenback, kAudioDevicePropertyModelUID, kAudioDevicePropertyMute, kAudioDevicePropertyNominalSampleRate, kAudioDevicePropertyPhantomPower, kAudioDevicePropertyPhaseInvert, kAudioDevicePropertyPlayThruDestination, kAudioDevicePropertyPlayThruDestinationNameForIDCFString, kAudioDevicePropertyPlayThruDestinations, kAudioDevicePropertyPreferredChannelLayout, kAudioDevicePropertyPreferredChannelsForStereo, kAudioDevicePropertyRelatedDevices, kAudioDevicePropertySafetyOffset, kAudioDevicePropertySolo, kAudioDevicePropertyStereoPan, kAudioDevicePropertyStereoPanChannels, kAudioDevicePropertyStreams, kAudioDevicePropertySubMute, kAudioDevicePropertySubVolumeDecibels, kAudioDevicePropertySubVolumeDecibelsToScalar, kAudioDevicePropertySubVolumeRangeDecibels, kAudioDevicePropertySubVolumeScalar, kAudioDevicePropertySubVolumeScalarToDecibels, kAudioDevicePropertyTalkback, kAudioDevicePropertyTransportType, kAudioDevicePropertyUsesVariableBufferFrameSizes, kAudioDevicePropertyVolumeDecibels, kAudioDevicePropertyVolumeDecibelsToScalar, kAudioDevicePropertyVolumeRangeDecibels, kAudioDevicePropertyVolumeScalar, kAudioDevicePropertyVolumeScalarToDecibels, kAudioHardwarePropertyBoxList, kAudioHardwarePropertyClockDeviceList, kAudioHardwarePropertyDefaultInputDevice, kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDefaultSystemOutputDevice, kAudioHardwarePropertyDevices, kAudioHardwarePropertyHogModeIsAllowed, kAudioHardwarePropertyIsInitingOrExiting, kAudioHardwarePropertyMixStereoToMono, kAudioHardwarePropertyPlugInList, kAudioHardwarePropertyPowerHint, kAudioHardwarePropertyProcessIsAudible, kAudioHardwarePropertyProcessIsMaster, kAudioHardwarePropertyServiceRestarted, kAudioHardwarePropertySleepingIsAllowed, kAudioHardwarePropertyTapList, kAudioHardwarePropertyTranslateBundleIDToPlugIn, kAudioHardwarePropertyTranslateBundleIDToTransportManager, kAudioHardwarePropertyTranslateUIDToBox, kAudioHardwarePropertyTranslateUIDToClockDevice, kAudioHardwarePropertyTranslateUIDToDevice, kAudioHardwarePropertyTransportManagerList, kAudioHardwarePropertyUnloadingIsAllowed, kAudioHardwarePropertyUserIDChanged, kAudioHardwarePropertyUserSessionIsActiveOrHeadless, kAudioObjectPropertyBaseClass, kAudioObjectPropertyClass, kAudioObjectPropertyCreator, kAudioObjectPropertyElementCategoryName, kAudioObjectPropertyElementMain, kAudioObjectPropertyElementName, kAudioObjectPropertyElementNumberName, kAudioObjectPropertyManufacturer, kAudioObjectPropertyModelName, kAudioObjectPropertyName, kAudioObjectPropertyOwnedObjects, kAudioObjectPropertyOwner, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyScopeInput, kAudioObjectPropertyScopeOutput, kAudioStreamPropertyAvailablePhysicalFormats, kAudioStreamPropertyAvailableVirtualFormats, kAudioStreamPropertyDirection, kAudioStreamPropertyIsActive, kAudioStreamPropertyLatency, kAudioStreamPropertyPhysicalFormat, kAudioStreamPropertyStartingChannel, kAudioStreamPropertyTerminalType, kAudioStreamPropertyVirtualFormat
 };
 
 // ---- Structs -------------
@@ -40,7 +40,6 @@ pub struct Property<T, Object, Access, L, E> {
     pub(crate) read: fn(&[u8]) -> Result<T, CoreAudioError>,
     pub(crate) encode: Option<fn(T) -> Vec<u8>>,
     pub(crate) qualifier: Option<Vec<u8>>,
-    pub(crate) element: u32,
     _object: PhantomData<Object>,
     _access: PhantomData<Access>,
     _listenable: PhantomData<L>,
@@ -58,7 +57,6 @@ impl<T, Object, Access, L, E> Property<T, Object, Access, L, E> {
             read,
             encode,
             qualifier: None,
-            element: 0,
             _object: PhantomData,
             _access: PhantomData,
             _listenable: PhantomData,
@@ -264,22 +262,6 @@ fn encode_array_u32_2(value: [u32; 2]) -> Vec<u8> {
     bytes.extend_from_slice(&value[0].to_ne_bytes());
     bytes.extend_from_slice(&value[1].to_ne_bytes());
     bytes
-}
-
-fn read_cfurl(bytes: &[u8]) -> Result<CFURLRef, CoreAudioError> {
-    if bytes.len() != size_of::<CFURLRef>() {
-        return Err(CoreAudioError::from_error_kind(ErrorKind::CFStringConversion));
-    }
-
-    let ptr = usize::from_ne_bytes(bytes[..size_of::<usize>()].try_into()
-        .map_err(|_| CoreAudioError::from_error_kind(ErrorKind::CFStringConversion))?
-    ) as CFURLRef;
-
-    if ptr.is_null() {
-        return Err(CoreAudioError::from_error_kind(ErrorKind::CFStringConversion));
-    }
-
-    Ok(ptr)
 }
 
 fn read_value_range(bytes: &[u8]) -> Result<AudioValueRange, CoreAudioError> {
@@ -667,17 +649,6 @@ Property::new(
         kAudioObjectPropertyScopeGlobal
     ),
     read_u32,
-    None,
-);
-
-/// The icon image for the device
-pub const DEVICE_ICON: Property<CFURLRef, Device, ReadOnly, Silent, NoExtra> =
-Property::new(
-    address(
-        kAudioDevicePropertyIcon,
-        kAudioObjectPropertyScopeGlobal
-    ),
-    read_cfurl,
     None,
 );
 
