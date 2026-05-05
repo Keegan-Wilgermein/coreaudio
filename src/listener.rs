@@ -144,7 +144,7 @@ impl<T, D, A> PropertyListener<T, D, A> {
 
     /// Blocks until a property change arrives or `duration` elapses.
     ///
-    /// Returns [`ErrorKind::ListenerTimeOut`] on timeout and
+    /// Returns [`ErrorKind::ListenerTimeout`] on timeout and
     /// [`ErrorKind::ListenerHangUp`] if the internal channel is closed.
     pub fn block_for_duration(&self, duration: Duration) -> Result<T, CoreAudioError> {
         match self.receiver.recv_timeout(duration) {

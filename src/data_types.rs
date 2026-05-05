@@ -531,6 +531,36 @@ impl FormatFlags {
 /// channel count, bit depth, and layout. Obtain one via
 /// [`STREAM_VIRTUAL_FORMAT`](crate::property::STREAM_VIRTUAL_FORMAT) or
 /// [`STREAM_PHYSICAL_FORMAT`](crate::property::STREAM_PHYSICAL_FORMAT).
+///
+/// ## Terminology
+///
+/// - **Sample** — a single amplitude value for a single channel at a single
+///   point in time.
+/// - **Frame** — one sample per channel, all captured at the same instant.
+///   This is the fundamental unit of audio time: advancing by one frame
+///   advances playback or recording by `1 / sample_rate` seconds.
+/// - **Packet** — the smallest indivisible chunk of compressed data. For
+///   uncompressed PCM, one packet always equals one frame
+///   (`frames_per_packet == 1`). For compressed formats such as AAC, one
+///   packet typically contains 1024 or more frames.
+///
+/// ## Relationship to [`AudioBuffer`](crate::AudioBuffer)
+///
+/// Each [`AudioBuffer`](crate::AudioBuffer) delivered to an `IOProc` callback
+/// represents one I/O cycle's worth of PCM audio. Its fields map directly onto
+/// this description:
+///
+/// - `frame_count` — the number of frames in the cycle; equals
+///   `DEVICE_BUFFER_FRAME_SIZE` under normal conditions.
+/// - `channels` — matches `channels_per_frame`.
+/// - `data.len()` — for **interleaved** buffers (`is_interleaved == true`):
+///   `frame_count * channels_per_frame` elements. For **non-interleaved**
+///   buffers, each buffer covers a single channel and contains `frame_count`
+///   elements, with one `AudioBuffer` per channel in the slice.
+///
+/// `IOProc` always delivers PCM, so `bytes_per_packet`, `frames_per_packet`,
+/// and `bytes_per_frame` reflect the uncompressed layout. The HAL performs any
+/// necessary decompression before handing data to the callback.
 #[derive(Debug, Clone, Copy)]
 pub struct StreamDescription {
     /// Sample rate in Hz (e.g. `44100.0` or `48000.0`).
@@ -540,17 +570,27 @@ pub struct StreamDescription {
     /// Decoded format flags describing byte order, packing, and interleaving.
     flags: FormatFlags,
     /// Concrete sample format derived from `bits_per_channel` and encoding,
-    /// or `None` for unknown compressed formats.
+    /// or `None` for compressed formats where bit depth is not meaningful.
     sample_format: Option<SampleFormat>,
-    /// Number of bytes in one packet of compressed data, or per frame for PCM.
+    /// Bytes in one packet. For PCM equals `bytes_per_frame`; for compressed
+    /// formats equals the encoded size of one packet (which spans
+    /// `frames_per_packet` frames). Zero if the packet size is variable.
     bytes_per_packet: u32,
-    /// Number of frames in one packet (1 for uncompressed PCM).
+    /// Frames per packet. Always `1` for uncompressed PCM. For compressed
+    /// formats this is the number of frames encoded into each packet — e.g.
+    /// `1024` for AAC-LC.
     frames_per_packet: u32,
-    /// Number of bytes in one frame (one sample per channel).
+    /// Bytes in one frame: `(bits_per_channel / 8) * channels_per_frame` for
+    /// packed PCM. Zero for compressed formats where frames are not
+    /// independently addressable.
     bytes_per_frame: u32,
-    /// Number of channels per audio frame.
+    /// Number of channels per frame. Matches `AudioBuffer::channels` for the
+    /// corresponding interleaved buffer, or the total channel count across all
+    /// non-interleaved buffers in an I/O cycle.
     channels_per_frame: u32,
-    /// Number of valid audio bits per channel (may be less than the container size).
+    /// Valid audio bits per channel. May be less than the container word size —
+    /// for example, 20-bit audio packed into a 32-bit word has
+    /// `bits_per_channel == 20` and `bytes_per_frame == 4 * channels`.
     bits_per_channel: u32,
     /// Reserved; always zero.
     reserved: u32,
