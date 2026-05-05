@@ -24,7 +24,7 @@ impl ObjectCompatibleWith<Stream> for Global {}
     label = "`set_property()` requires properties with `ReadWrite`",
 )]
 /// Checks property compatibility with `ReadWrite`
-pub(crate) trait Writeable {}
+pub trait Writeable {}
 
 impl Writeable for ReadWrite {}
 
@@ -33,7 +33,7 @@ impl Writeable for ReadWrite {}
     label = "`add_listener()` requires propertes with `Listenable`",
 )]
 /// Checks property compatibility with `Listenable`
-pub(crate) trait CanListen {}
+pub trait CanListen {}
 
 impl CanListen for Listenable {}
 
@@ -43,12 +43,12 @@ impl CanListen for Listenable {}
 )]
 
 /// Checks for no extra data on a property
-pub(crate) trait HasAllData {}
+pub trait HasAllData {}
 
 impl HasAllData for NoExtra {}
 
 /// Method to add qualifier data to property
-pub(crate) trait IntoQualifierBytes {
+pub trait IntoQualifierBytes {
     fn into_bytes(self) -> Vec<u8>;
 }
 
@@ -62,7 +62,7 @@ impl IntoQualifierBytes for u32 {
     message = "this property does not accept qualifier data",
 )]
 /// Method to add qualifier data to property
-pub(crate) trait MissingQualifier<T> {
+pub trait MissingQualifier<T> {
     type Output;
 
     fn with_qualifier(self, qualifier: T) -> Self::Output
@@ -111,7 +111,7 @@ impl<V, D, A, L, T> MissingQualifier<T> for Property<V, D, A, L, NeedBoth<T>> {
     message = "this property does not accept element data",
 )]
 /// Method to add element data to property
-pub(crate) trait MissingElement {
+pub trait MissingElement {
     type Output;
 
     fn for_element(self, element: u32) -> Self::Output;
