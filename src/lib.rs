@@ -50,6 +50,7 @@ pub mod io_proc;
 pub mod listener;
 pub mod object;
 pub mod property;
+mod traits;
 
 // ---- Re-exports ------------
 
@@ -78,6 +79,7 @@ pub use object::{
     Device,
     Stream,
     System,
+    Global,
 };
 
 // Listener
