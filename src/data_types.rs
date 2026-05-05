@@ -5,7 +5,7 @@
 // ---- Imports ------------
 use std::ops::RangeInclusive;
 use coreaudio_sys::{
-    AudioStreamBasicDescription, AudioValueRange, kAudioFormatAC3, kAudioFormatAES3, kAudioFormatALaw, kAudioFormatAMR, kAudioFormatAMR_WB, kAudioFormatAPAC, kAudioFormatAppleLossless, kAudioFormatEnhancedAC3, kAudioFormatFlagIsBigEndian, kAudioFormatFlagIsFloat, kAudioFormatFlagIsNonInterleaved, kAudioFormatFlagIsNonMixable, kAudioFormatFlagIsPacked, kAudioFormatFlagIsSignedInteger, kAudioFormatLinearPCM, kAudioFormatMPEG4AAC, kAudioFormatMPEG4AAC_ELD, kAudioFormatMPEG4AAC_ELD_SBR, kAudioFormatMPEG4AAC_ELD_V2, kAudioFormatMPEG4AAC_HE, kAudioFormatMPEG4AAC_HE_V2, kAudioFormatMPEG4AAC_LD, kAudioFormatMPEG4AAC_Spatial, kAudioFormatMPEGLayer3, kAudioFormatOpus
+    AudioStreamBasicDescription, AudioStreamRangedDescription, AudioValueRange, kAudioDeviceTransportTypeAVB, kAudioDeviceTransportTypeAggregate, kAudioDeviceTransportTypeAirPlay, kAudioDeviceTransportTypeAutoAggregate, kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE, kAudioDeviceTransportTypeBuiltIn, kAudioDeviceTransportTypeContinuityCapture, kAudioDeviceTransportTypeContinuityCaptureWired, kAudioDeviceTransportTypeContinuityCaptureWireless, kAudioDeviceTransportTypeDisplayPort, kAudioDeviceTransportTypeFireWire, kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypePCI, kAudioDeviceTransportTypeThunderbolt, kAudioDeviceTransportTypeUSB, kAudioDeviceTransportTypeVirtual, kAudioFormatAC3, kAudioFormatAES3, kAudioFormatALaw, kAudioFormatAMR, kAudioFormatAMR_WB, kAudioFormatAPAC, kAudioFormatAppleLossless, kAudioFormatEnhancedAC3, kAudioFormatFlagIsBigEndian, kAudioFormatFlagIsFloat, kAudioFormatFlagIsNonInterleaved, kAudioFormatFlagIsNonMixable, kAudioFormatFlagIsPacked, kAudioFormatFlagIsSignedInteger, kAudioFormatLinearPCM, kAudioFormatMPEG4AAC, kAudioFormatMPEG4AAC_ELD, kAudioFormatMPEG4AAC_ELD_SBR, kAudioFormatMPEG4AAC_ELD_V2, kAudioFormatMPEG4AAC_HE, kAudioFormatMPEG4AAC_HE_V2, kAudioFormatMPEG4AAC_LD, kAudioFormatMPEG4AAC_Spatial, kAudioFormatMPEGLayer3, kAudioFormatOpus, kAudioStreamTerminalTypeDigitalAudioInterface, kAudioStreamTerminalTypeDisplayPort, kAudioStreamTerminalTypeHDMI, kAudioStreamTerminalTypeHeadphones, kAudioStreamTerminalTypeHeadsetMicrophone, kAudioStreamTerminalTypeLFESpeaker, kAudioStreamTerminalTypeLine, kAudioStreamTerminalTypeMicrophone, kAudioStreamTerminalTypeReceiverMicrophone, kAudioStreamTerminalTypeReceiverSpeaker, kAudioStreamTerminalTypeSpeaker, kAudioStreamTerminalTypeTTY
 };
 use num_traits::AsPrimitive;
 use crate::errors::{CoreAudioError, ErrorKind};
@@ -16,6 +16,7 @@ const I24_MAX: i32 = 2i32.pow(24 - 1) - 1;
 
 // ---- Enums ------------
 /// Input or output device selector
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scope {
     /// Input devices
     Input,
@@ -35,14 +36,152 @@ impl TryFrom<u32> for Scope {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SampleEncoding {
     Float,
     SignedInt,
     UnSignedInt,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HogMode {
+    Released,
+    Owned(i32),
+}
+
+impl From<i32> for HogMode {
+    fn from(value: i32) -> Self {
+        match value {
+            -1 => Self::Released,
+            pid => Self::Owned(pid),
+        }
+    }
+}
+
+impl Into<i32> for HogMode {
+    fn into(self) -> i32 {
+        match self {
+            Self::Released => -1,
+            Self::Owned(pid) => pid,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PowerHint {
+    None,
+    PowerSaving,
+}
+
+impl TryFrom<u32> for PowerHint {
+    type Error = CoreAudioError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::None),
+            1 => Ok(Self::PowerSaving),
+            _ => Err(CoreAudioError::from_error_kind(ErrorKind::PowerHintConversion)),
+        }
+    }
+}
+
+impl Into<u32> for PowerHint {
+    fn into(self) -> u32 {
+        match self {
+            Self::None => 0,
+            Self::PowerSaving => 1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransportType {
+    BuiltIn,
+    Aggregate,
+    AutoAggregate,
+    Virtual,
+    PCIE,
+    USB,
+    FireWire,
+    Bluetooth,
+    BluetoothLE,
+    HDMI,
+    DisplayPort,
+    AirPlay,
+    AVB,
+    Thunderbolt,
+    ContinuityCapture,
+    ContinuityCaptureWired,
+    ContinuityCaptureWireless,
+    Unknown(u32),
+}
+
+impl From<u32> for TransportType {
+    #[allow(non_upper_case_globals)]
+    fn from(value: u32) -> Self {
+        match value {
+            kAudioDeviceTransportTypeBuiltIn => Self::BuiltIn,
+            kAudioDeviceTransportTypeAggregate => Self::Aggregate,
+            kAudioDeviceTransportTypeAutoAggregate => Self::AutoAggregate,
+            kAudioDeviceTransportTypeVirtual => Self::Virtual,
+            kAudioDeviceTransportTypePCI => Self::PCIE,
+            kAudioDeviceTransportTypeUSB => Self::USB,
+            kAudioDeviceTransportTypeFireWire => Self::FireWire,
+            kAudioDeviceTransportTypeBluetooth => Self::Bluetooth,
+            kAudioDeviceTransportTypeBluetoothLE => Self::BluetoothLE,
+            kAudioDeviceTransportTypeHDMI => Self::HDMI,
+            kAudioDeviceTransportTypeDisplayPort => Self::DisplayPort,
+            kAudioDeviceTransportTypeAirPlay => Self::AirPlay,
+            kAudioDeviceTransportTypeAVB => Self::AVB,
+            kAudioDeviceTransportTypeThunderbolt => Self::Thunderbolt,
+            kAudioDeviceTransportTypeContinuityCapture => Self::ContinuityCapture,
+            kAudioDeviceTransportTypeContinuityCaptureWired => Self::ContinuityCaptureWired,
+            kAudioDeviceTransportTypeContinuityCaptureWireless => Self::ContinuityCaptureWireless,
+            id => Self::Unknown(id),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalType {
+    Line,
+    DigitalAudioInterface,
+    Speaker,
+    Headphones,
+    LFESpeaker,
+    ReceiverSpeaker,
+    Microphone,
+    HeadsetMicrophone,
+    ReceiverMicrophone,
+    TTY,
+    HDMI,
+    DisplayPort,
+    Unknown(u32),
+}
+
+#[allow(non_upper_case_globals)]
+impl From<u32> for TerminalType {
+    fn from(value: u32) -> Self {
+        match value {
+            kAudioStreamTerminalTypeLine => Self::Line,
+            kAudioStreamTerminalTypeDigitalAudioInterface => Self::DigitalAudioInterface,
+            kAudioStreamTerminalTypeSpeaker => Self::Speaker,
+            kAudioStreamTerminalTypeHeadphones => Self::Headphones,
+            kAudioStreamTerminalTypeLFESpeaker => Self::LFESpeaker,
+            kAudioStreamTerminalTypeReceiverSpeaker => Self::ReceiverSpeaker,
+            kAudioStreamTerminalTypeMicrophone => Self::Microphone,
+            kAudioStreamTerminalTypeHeadsetMicrophone => Self::HeadsetMicrophone,
+            kAudioStreamTerminalTypeReceiverMicrophone => Self::ReceiverMicrophone,
+            kAudioStreamTerminalTypeTTY => Self::TTY,
+            kAudioStreamTerminalTypeHDMI => Self::HDMI,
+            kAudioStreamTerminalTypeDisplayPort => Self::DisplayPort,
+            id => Self::Unknown(id),
+        }
+    }
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SampleFormat {
 // Unsigned
     U8,
@@ -104,7 +243,7 @@ impl SampleFormat {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AACFormat {
     Standard,
     ELD,
@@ -264,6 +403,7 @@ impl FormatFlags {
 }
 
 /// Audio stream description
+#[derive(Debug, Clone, Copy)]
 pub struct StreamDescription {
     sample_rate: f64,
     format_id: FormatId,
@@ -349,6 +489,7 @@ impl StreamDescription {
 }
 
 /// A range of sizes supported by a device to be used as a buffer size
+#[derive(Debug)]
 pub struct BufferFrameSizeRange {
     min: u32,
     max: u32,
@@ -376,6 +517,32 @@ impl BufferFrameSizeRange {
     }
 }
 
+#[derive(Debug)]
+pub struct StreamRangedDescription {
+    stream_description: StreamDescription,
+    sample_rate_range: SampleRateRange,
+}
+
+impl From<AudioStreamRangedDescription> for StreamRangedDescription {
+    fn from(value: AudioStreamRangedDescription) -> Self {
+        Self {
+            stream_description: value.mFormat.into(),
+            sample_rate_range: value.mSampleRateRange.into(),
+        }
+    }
+}
+
+impl StreamRangedDescription {
+    pub fn stream_description(&self) -> StreamDescription {
+        self.stream_description
+    }
+
+    pub fn sample_rate_range(&self) -> SampleRateRange {
+        self.sample_rate_range
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct SampleRateRange {
     min: f64,
     max: f64,
@@ -401,5 +568,63 @@ impl SampleRateRange {
 
     pub fn as_range(&self) -> RangeInclusive<f64> {
         self.min..=self.max
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct DBRange {
+    min: f64,
+    max: f64,
+}
+
+impl From<AudioValueRange> for DBRange {
+    fn from(value: AudioValueRange) -> Self {
+        Self {
+            min: value.mMinimum,
+            max: value.mMaximum,
+        }
+    }
+}
+
+impl DBRange {
+    pub fn min(&self) -> f64 {
+        self.min
+    }
+
+    pub fn max(&self) -> f64 {
+        self.max
+    }
+
+    pub fn as_range(&self) -> RangeInclusive<f64> {
+        self.min..=self.max
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ChannelPair {
+    left: u32,
+    right: u32,
+}
+
+impl From<[u32; 2]> for ChannelPair {
+    fn from(value: [u32; 2]) -> Self {
+        Self {
+            left: value[0],
+            right: value[1],
+        }
+    }
+}
+
+impl ChannelPair {
+    pub fn left(&self) -> u32 {
+        self.left
+    }
+
+    pub fn right(&self) -> u32 {
+        self.right
+    }
+
+    pub fn as_array(&self) -> [u32; 2] {
+        [self.left, self.right]
     }
 }

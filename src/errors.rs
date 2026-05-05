@@ -77,13 +77,15 @@ pub enum ErrorKind {
     // ---- Other errors ------------
     CFStringConversion,
     BoolConversion,
-    F64Conversion,
+    FPConversion,
     I32Conversion,
     U32Conversion,
     ScopeConversion,
     AudioObjectIdConversion,
     StreamDescriptionConversion,
     ValueRangeConversion,
+    PowerHintConversion,
+    HogModeConversion,
 
     // ---- Listener errors ------------
     ListenerHangUp,
