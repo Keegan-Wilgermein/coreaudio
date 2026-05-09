@@ -179,9 +179,7 @@ let buffer_range = device.get_property(DEVICE_BUFFER_FRAME_SIZE_RANGE)?;
 println!("Valid buffer sizes: {:?}", buffer_range.valid_sizes());
 
 let sample_rates = device.get_property(DEVICE_AVAILABLE_SAMPLE_RATES)?;
-for range in &sample_rates {
-    println!("{}–{} Hz", range.min(), range.max());
-}
+println!("Valid sample rates: {:?}", sample_rates.valid_rates());
 ```
 
 ## Property reference
@@ -342,7 +340,7 @@ The `FormatId` enum covers Linear PCM, AAC (Standard, HE, HEv2, LD, ELD, ELDv2, 
 - Add new wrappers and 'multi-properties' that combine multiple properties into one for things that shouldn't have to be seperate calls
 - Properties for device sample format
 
-## Breaking changes - v0.2.1
+## Breaking changes - v0.2.2
 - Replaced all methods on `SampleRateRange` with methods
     - `.valid_rates()`
     - `.supported_48_khz_rates()`
