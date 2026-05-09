@@ -343,19 +343,11 @@ The `FormatId` enum covers Linear PCM, AAC (Standard, HE, HEv2, LD, ELD, ELDv2, 
 - Add new wrappers and 'multi-properties' that combine multiple properties into one for things that shouldn't have to be seperate calls
 - Properties for device sample format
 
-## Breaking changes - v0.2.0
-- A lot of property rules have been updated to be more accurate
-- Function `.add_io_proc()` returns `&[AudioBuffer]` instead of `&mut [AudioBuffer]`<br>The data stored inside is still mutable
-- Dedicated methods for
-    - `.avaliable_sample_rates()`
-    - `.avaliable_buffer_sizes()`
-    - `.stream_virtual_format()`
-    - `stream_physical_format()`
-
-    have been removed in favour of them being accessed via `.get_property()`
-- Some properties now require calls to `.with_qualifier()` and / or `.for_element()`
-- Some properties now return wrapper types instead of the raw values but they all implement `.into()` or have dedicated reverse functions
-- Properties have a 5th type parameter instead of the previous 4
+## Breaking changes - v0.2.1
+- Replaced all methods on `SampleRateRange` with methods
+    - `.valid_rates()`
+    - `.supported_48_khz_rates()`
+    - `.supported_44_1_khz_rates()`
 
 ## Disclaimer
 Apple's documentation on what properties can be listened to is pretty much non existant.

@@ -7,7 +7,7 @@
 #![forbid(unsafe_code)]
 
 // ---- Imports ------------
-use std::ops::RangeInclusive;
+use std::{cmp::Ordering, ops::RangeInclusive};
 use coreaudio_sys::{
     AudioStreamBasicDescription, AudioStreamRangedDescription, AudioValueRange, kAudioDeviceTransportTypeAVB, kAudioDeviceTransportTypeAggregate, kAudioDeviceTransportTypeAirPlay, kAudioDeviceTransportTypeAutoAggregate, kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE, kAudioDeviceTransportTypeBuiltIn, kAudioDeviceTransportTypeContinuityCapture, kAudioDeviceTransportTypeContinuityCaptureWired, kAudioDeviceTransportTypeContinuityCaptureWireless, kAudioDeviceTransportTypeDisplayPort, kAudioDeviceTransportTypeFireWire, kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypePCI, kAudioDeviceTransportTypeThunderbolt, kAudioDeviceTransportTypeUSB, kAudioDeviceTransportTypeVirtual, kAudioFormatAC3, kAudioFormatAES3, kAudioFormatALaw, kAudioFormatAMR, kAudioFormatAMR_WB, kAudioFormatAPAC, kAudioFormatAppleLossless, kAudioFormatEnhancedAC3, kAudioFormatFlagIsBigEndian, kAudioFormatFlagIsFloat, kAudioFormatFlagIsNonInterleaved, kAudioFormatFlagIsNonMixable, kAudioFormatFlagIsPacked, kAudioFormatFlagIsSignedInteger, kAudioFormatLinearPCM, kAudioFormatMPEG4AAC, kAudioFormatMPEG4AAC_ELD, kAudioFormatMPEG4AAC_ELD_SBR, kAudioFormatMPEG4AAC_ELD_V2, kAudioFormatMPEG4AAC_HE, kAudioFormatMPEG4AAC_HE_V2, kAudioFormatMPEG4AAC_LD, kAudioFormatMPEG4AAC_Spatial, kAudioFormatMPEGLayer3, kAudioFormatOpus, kAudioStreamTerminalTypeDigitalAudioInterface, kAudioStreamTerminalTypeDisplayPort, kAudioStreamTerminalTypeHDMI, kAudioStreamTerminalTypeHeadphones, kAudioStreamTerminalTypeHeadsetMicrophone, kAudioStreamTerminalTypeLFESpeaker, kAudioStreamTerminalTypeLine, kAudioStreamTerminalTypeMicrophone, kAudioStreamTerminalTypeReceiverMicrophone, kAudioStreamTerminalTypeReceiverSpeaker, kAudioStreamTerminalTypeSpeaker, kAudioStreamTerminalTypeTTY
 };
@@ -718,6 +718,8 @@ impl BufferFrameSizeRange {
 /// Used by `STREAM_AVAILABLE_VIRTUAL_FORMATS` and
 /// `STREAM_AVAILABLE_PHYSICAL_FORMATS` to describe each format the stream can
 /// operate in.
+/// 
+/// Essentially just a `StreamDescription` but with a `SampleRateRange`
 #[derive(Debug)]
 pub struct StreamRangedDescription {
     /// The audio format parameters for this entry.
@@ -770,19 +772,86 @@ impl From<AudioValueRange> for SampleRateRange {
 }
 
 impl SampleRateRange {
-    /// Lowest sample rate in the range, in Hz.
-    pub fn min(&self) -> f64 {
-        self.min
+    /// Gets all supported sample rates regardless of family
+    pub fn valid_rates(&self) -> Vec<f64> {
+        let mut rates = self.supported_48_khz_rates();
+        rates.append(&mut self.supported_41_1_khz_rates());
+
+        rates.sort_by(|a, b| {
+            if a < b {
+                Ordering::Less
+            } else if a > b {
+                Ordering::Greater
+            } else {
+                Ordering::Equal
+            }
+        });
+
+        rates
     }
 
-    /// Highest sample rate in the range, in Hz.
-    pub fn max(&self) -> f64 {
-        self.max
+    /// Gets all supported rates in the 48khz family
+    pub fn supported_48_khz_rates(&self) -> Vec<f64> {
+        let base = 48000.0;
+        let mut rates = Vec::new();
+
+        // Halve down from base
+        let mut rate = base;
+        while rate >= self.min {
+            rates.push(rate);
+            rate /= 2.0;
+        }
+
+        // Double up from base
+        let mut rate = base * 2.0;
+        while rate <= self.max {
+            rates.push(rate);
+            rate *= 2.0;
+        }
+
+        rates.sort_by(|a, b| {
+            if a < b {
+                Ordering::Less
+            } else if a > b {
+                Ordering::Greater
+            } else {
+                Ordering::Equal
+            }
+        });
+
+        rates
     }
 
-    /// Returns the range as a standard `RangeInclusive<f64>`.
-    pub fn as_range(&self) -> RangeInclusive<f64> {
-        self.min..=self.max
+    /// Gets all supported rates in the 44.1khz family
+    pub fn supported_41_1_khz_rates(&self) -> Vec<f64> {
+        let base = 41100.0;
+        let mut rates = Vec::new();
+
+        // Halve down from base
+        let mut rate = base;
+        while rate >= self.min {
+            rates.push(rate);
+            rate /= 2.0;
+        }
+
+        // Double up from base
+        let mut rate = base * 2.0;
+        while rate <= self.max {
+            rates.push(rate);
+            rate *= 2.0;
+        }
+
+        rates.sort_by(|a, b| {
+            if a < b {
+                Ordering::Less
+            } else if a > b {
+                Ordering::Greater
+            } else {
+                Ordering::Equal
+            }
+        });
+        
+        rates
     }
 }
 
