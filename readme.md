@@ -338,7 +338,6 @@ The `FormatId` enum covers Linear PCM, AAC (Standard, HE, HEv2, LD, ELD, ELDv2, 
 
 ## Roadmap
 
-- **Sample rate validation** — `SampleRateRange` currently exposes raw min/max values. A future release will add a validation method that checks whether a given sample rate falls within a device's supported ranges and snaps to the nearest valid rate.
 - Dedicated `AudioObject<Clock>`,  `AudioObject<Box>`, and `AudioObject<Tap>` with unique methods
 - Add new wrappers and 'multi-properties' that combine multiple properties into one for things that shouldn't have to be seperate calls
 - Properties for device sample format
