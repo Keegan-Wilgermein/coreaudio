@@ -202,8 +202,8 @@ fn read_vec_audio_object_id(bytes: &[u8]) -> Result<Vec<AudioObjectID>, CoreAudi
     }
 
     Ok(bytes.chunks(size_of::<AudioObjectID>())
-        .map(|chunk| unsafe { std::ptr::read(chunk.as_ptr() as *const AudioObjectID) })
-        .collect())
+    .map(|chunk| AudioObjectID::from_ne_bytes(chunk.try_into().unwrap()))
+    .collect())
 }
 
 /// Reads a packed array of `AudioValueRange` values and converts each to a
