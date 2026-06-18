@@ -290,6 +290,9 @@ Properties marked **both** require both calls (in either order).
 | Constant | Type | Access | Listenable | Extra |
 |---|---|---|---|---|
 | `SYSTEM_NAME` | `String` | Read | No | — |
+| `SYSTEM_DEVICES` | `Vec<u32>` | Read | Yes | — |
+| `SYSTEM_DEFAULT_INPUT` | `u32` | Read/Write | Yes | — |
+| `SYSTEM_DEFAULT_OUTPUT` | `u32` | Read/Write | Yes | — |
 | `SYSTEM_IS_INITING_OR_EXITING` | `bool` | Read | No | — |
 | `SYSTEM_SLEEPING_IS_ALLOWED` | `bool` | Read/Write | Yes | — |
 | `SYSTEM_UNLOADING_IS_ALLOWED` | `bool` | Read/Write | No | — |
@@ -339,12 +342,6 @@ The `FormatId` enum covers Linear PCM, AAC (Standard, HE, HEv2, LD, ELD, ELDv2, 
 - Dedicated `AudioObject<Clock>`,  `AudioObject<Box>`, and `AudioObject<Tap>` with unique methods
 - Add new wrappers and 'multi-properties' that combine multiple properties into one for things that shouldn't have to be seperate calls
 - Properties for device sample format
-
-## Breaking changes - v0.2.2
-- Replaced all methods on `SampleRateRange` with methods
-    - `.valid_rates()`
-    - `.supported_48_khz_rates()`
-    - `.supported_44_1_khz_rates()`
 
 ## Disclaimer
 Apple's documentation on what properties can be listened to is pretty much non existant.

@@ -1634,7 +1634,7 @@ Property::new(
 /// Includes built-in and all connected external hardware. Listen to detect
 /// devices being plugged in or removed — the list changes on any
 /// connect/disconnect event.
-pub(crate) const SYSTEM_DEVICES: Property<Vec<AudioObjectID>, System, ReadOnly, Listenable, NoExtra> =
+pub const SYSTEM_DEVICES: Property<Vec<AudioObjectID>, System, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioHardwarePropertyDevices,
@@ -1648,7 +1648,7 @@ Property::new(
 /// Write a device's ID to change the system default input. Listen to detect
 /// when the user or another process changes it — for example via System
 /// Settings or the menu bar volume control.
-pub(crate) const SYSTEM_DEFAULT_INPUT: Property<AudioObjectID, System, ReadWrite, Listenable, NoExtra> =
+pub const SYSTEM_DEFAULT_INPUT: Property<AudioObjectID, System, ReadWrite, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioHardwarePropertyDefaultInputDevice,
@@ -1662,7 +1662,7 @@ Property::new(
 ///
 /// Write a device's ID to change the system default output. Listen to detect
 /// when the user or another process changes it.
-pub(crate) const SYSTEM_DEFAULT_OUTPUT: Property<AudioObjectID, System, ReadWrite, Listenable, NoExtra> =
+pub const SYSTEM_DEFAULT_OUTPUT: Property<AudioObjectID, System, ReadWrite, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioHardwarePropertyDefaultOutputDevice,
