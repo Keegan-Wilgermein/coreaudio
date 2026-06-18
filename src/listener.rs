@@ -49,7 +49,7 @@ pub struct PropertyListener<T, D, A> {
     /// Property address registered with CoreAudio.
     address: AudioObjectPropertyAddress,
     /// Shared callback context; kept alive for the duration of the listener.
-    callback_client_data: ClientCallbackData<T>,
+    callback_client_data: *mut ClientCallbackData<T>,
     /// Receiving end of the MPSC channel fed by the CoreAudio callback.
     receiver: Receiver<T>,
     _device: PhantomData<D>,
@@ -63,8 +63,9 @@ impl<T, D, A> Drop for PropertyListener<T, D, A> {
                 self.id,
                 &self.address,
                 Some(io_callback::<T, D, A>),
-                self.callback_client_data.as_c_void(),
+                self.callback_client_data as *mut c_void,
             );
+            drop(Box::from_raw(self.callback_client_data));
         }
     }
 }
@@ -81,32 +82,28 @@ impl<T, D, A> PropertyListener<T, D, A> {
     ) -> Result<Self, CoreAudioError> {
         let (sender, receiver) = mpsc::channel::<T>();
 
-        let callback_client_data = ClientCallbackData {
+        let callback_client_data = Box::into_raw(Box::new(ClientCallbackData {
             read,
             sender,
-        };
-
-        let callback_data_ptr = callback_client_data.as_c_void();
+        }));
 
         unsafe {
             AudioObjectAddPropertyListener(
                 id,
                 &address,
                 Some(io_callback::<T, D, A>),
-                callback_data_ptr,
+                callback_client_data as *mut c_void,
             ).check()?;
         };
 
-        Ok(
-            Self {
-                id,
-                address,
-                callback_client_data,
-                receiver,
-                _device: PhantomData,
-                _access: PhantomData,
-            }
-        )
+        Ok(Self {
+            id,
+            address,
+            callback_client_data,
+            receiver,
+            _device: PhantomData,
+            _access: PhantomData,
+        })
     }
 
     /// Unregisters the listener and releases all associated resources.
