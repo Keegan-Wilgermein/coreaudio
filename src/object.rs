@@ -21,28 +21,28 @@ use coreaudio_sys::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, 
 /// `Global` properties are defined on the base `AudioObject` class in CoreAudio
 /// and apply equally to system objects, devices, and streams. A
 /// `Property<_, Global, _, _, _>` constant can be used with any `AudioObject`.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Global;
 
 /// Marker for [`AudioObject`] granting access to system-wide HAL properties.
 ///
 /// Construct the system object with `AudioObject::<System>::default()`. It
 /// exposes device enumeration, default device selection, and global HAL state.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct System;
 
 /// Marker for [`AudioObject`] granting access to device-specific properties.
 ///
 /// Obtain device objects from [`AudioObject::<System>::devices`] or
 /// [`AudioObject::<System>::devices_with_scope`].
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Device;
 
 /// Marker for [`AudioObject`] granting access to stream-specific properties.
 ///
 /// Obtain stream objects from [`AudioObject::<Device>::streams`] or
 /// [`AudioObject::<Device>::streams_with_scope`].
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Stream;
 
 /// A CoreAudio HAL object identified by an `AudioObjectID`.
@@ -50,7 +50,7 @@ pub struct Stream;
 /// The type parameter `T` is one of [`System`], [`Device`], [`Stream`],
 /// and determines which `impl` blocks — and therefore which methods
 /// and properties — are available on this value.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AudioObject<T> {
     /// Raw CoreAudio object identifier.
     id: AudioObjectID,
