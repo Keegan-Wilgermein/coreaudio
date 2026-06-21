@@ -46,6 +46,7 @@ pub struct Stream;
 /// The type parameter `T` is one of [`System`], [`Device`], [`Stream`],
 /// and determines which `impl` blocks — and therefore which methods
 /// and properties — are available on this value.
+#[derive(Clone, Copy)]
 pub struct AudioObject<T> {
     /// Raw CoreAudio object identifier.
     id: AudioObjectID,
