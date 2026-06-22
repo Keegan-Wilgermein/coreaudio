@@ -50,7 +50,7 @@ pub mod io_proc;
 pub mod listener;
 pub mod object;
 pub mod property;
-mod traits;
+pub mod traits;
 
 // ---- Re-exports ------------
 
@@ -120,6 +120,7 @@ pub use traits::{
     MissingQualifier,
     ObjectCompatibleWith,
     Writeable,
+    ValidSampleRates,
 };
 
 // Property constants — AudioObject (global)
