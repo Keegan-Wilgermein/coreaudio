@@ -772,10 +772,20 @@ impl From<AudioValueRange> for SampleRateRange {
 }
 
 impl SampleRateRange {
+    /// Gets the minimum supported sample rate
+    pub fn get_min(&self) -> f64 {
+        self.min
+    }
+
+    /// Gets the maximum supported sample rate
+    pub fn get_max(&self) -> f64 {
+        self.max
+    }
+
     /// Gets all supported sample rates regardless of family
     pub fn valid_rates(&self) -> Vec<f64> {
         let mut rates = self.supported_48_khz_rates();
-        rates.append(&mut self.supported_41_1_khz_rates());
+        rates.append(&mut self.supported_44_1_khz_rates());
 
         rates.sort_by(|a, b| {
             if a < b {
@@ -823,8 +833,8 @@ impl SampleRateRange {
     }
 
     /// Gets all supported rates in the 44.1khz family
-    pub fn supported_41_1_khz_rates(&self) -> Vec<f64> {
-        let base = 41100.0;
+    pub fn supported_44_1_khz_rates(&self) -> Vec<f64> {
+        let base = 44100.0;
         let mut rates = Vec::new();
 
         // Halve down from base
