@@ -7,7 +7,7 @@
 //! they can be used.
 
 // ---- Imports ------------
-use crate::{Device, Global, Property, Stream, System, property::{Listenable, NeedBoth, NeedElement, NeedQualifier, NoExtra, ReadWrite, encode_string, encode_u32, encode_vec_u32}};
+use crate::{Device, Global, Property, SampleRateRange, Stream, System, property::{Listenable, NeedBoth, NeedElement, NeedQualifier, NoExtra, ReadWrite, encode_string, encode_u32, encode_vec_u32}};
 
 // ---- Traits ------------
 
@@ -203,5 +203,20 @@ impl<V, D, A, L, T> MissingElement for Property<V, D, A, L, NeedBoth<T>> {
 
         new.qualifier = self.qualifier;
         new
+    }
+}
+
+/// Adds a method to `Vec<SampleRateRange>`
+/// to parse all valid sample rates for a device
+pub trait ValidSampleRates {
+    fn valid_rates(&self) -> Vec<f64>;
+}
+
+impl ValidSampleRates for Vec<SampleRateRange> {
+    fn valid_rates(&self) -> Vec<f64> {
+        self.iter()
+        .map(|range| {
+            range.get_min()
+        }).collect()
     }
 }
