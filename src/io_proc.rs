@@ -20,7 +20,7 @@ use crate::{Scope, errors::{CoreAudioError, ErrorKind, OSStatusCheck}, object::{
 /// casting back inside `io_callback`.
 struct ClientCallbackData<F>
 where
-    F: Fn(&[AudioBuffer]) + Send + 'static,
+    F: FnMut(&[AudioBuffer]) + Send + 'static,
 {
     /// The user-supplied audio render callback.
     callback: F,
@@ -82,7 +82,7 @@ impl IOProc {
         callback: F,
     ) -> Result<Self, CoreAudioError>
     where
-        F: Fn(&[AudioBuffer]) + Send + 'static,
+        F: FnMut(&[AudioBuffer]) + Send + 'static,
     {
         let client_data = ClientCallbackData {
             callback,
@@ -172,10 +172,10 @@ extern "C" fn io_callback<F>(
     client_data: *mut c_void,
 ) -> OSStatus
 where
-    F: Fn(&[AudioBuffer]) + Send + 'static,
+    F: FnMut(&[AudioBuffer]) + Send + 'static,
 {
     unsafe {
-        let client_data = &*(client_data as *mut ClientCallbackData<F>);
+        let client_data = &mut *(client_data as *mut ClientCallbackData<F>);
 
         let buffers = match client_data.scope{
             Scope::Input => std::slice::from_raw_parts_mut(
