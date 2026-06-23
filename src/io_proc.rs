@@ -36,7 +36,7 @@ pub struct AudioBuffer<'a> {
     /// Slice of output samples to fill. The length equals
     /// `frame_count * channels` for interleaved data, or `frame_count` for
     /// non-interleaved (one buffer per channel).
-    pub data: &'a [f32],
+    pub data: &'a mut [f32],
     /// Number of audio channels carried by this buffer.
     channels: u32,
     /// `true` if all channels share this buffer (interleaved layout).
