@@ -277,12 +277,13 @@ impl AudioObject<Device> {
     /// Call [`IOProc::play`] to start audio delivery.
     pub fn add_io_proc<F>(
         &self,
+        scope: Scope,
         callback: F,
     ) -> Result<IOProc, CoreAudioError>
     where
         F: Fn(&[AudioBuffer]) + Send + 'static,
     {
-        IOProc::try_new(&self, callback)
+        IOProc::try_new(&self, scope, callback)
     }
 }
 

@@ -10,7 +10,7 @@
 // ---- Imports ------------
 use std::{ffi::c_void};
 use coreaudio_sys::{self, AudioBufferList, AudioDeviceCreateIOProcID, AudioDeviceDestroyIOProcID, AudioDeviceID, AudioDeviceIOProcID, AudioDeviceStart, AudioDeviceStop, AudioTimeStamp, OSStatus};
-use crate::{errors::{CoreAudioError, ErrorKind, OSStatusCheck}, object::{AudioObject, Device}};
+use crate::{Scope, errors::{CoreAudioError, ErrorKind, OSStatusCheck}, object::{AudioObject, Device}};
 
 // ---- Structs ------------
 
@@ -24,6 +24,7 @@ where
 {
     /// The user-supplied audio render callback.
     callback: F,
+    scope: Scope,
 }
 
 /// A single output buffer delivered to the audio render callback.
@@ -77,6 +78,7 @@ impl IOProc {
     /// called explicitly to begin audio delivery.
     pub(crate) fn try_new<F>(
         device: &AudioObject<Device>,
+        scope: Scope,
         callback: F,
     ) -> Result<Self, CoreAudioError>
     where
@@ -84,6 +86,7 @@ impl IOProc {
     {
         let client_data = ClientCallbackData {
             callback,
+            scope,
         };
 
         let data_ptr = Box::into_raw(Box::new(client_data)) as *mut c_void;
@@ -162,7 +165,7 @@ impl IOProc {
 extern "C" fn io_callback<F>(
     _device: AudioDeviceID,
     _now: *const AudioTimeStamp,
-    _input: *const AudioBufferList,
+    input: *const AudioBufferList,
     _input_time: *const AudioTimeStamp,
     output: *mut AudioBufferList,
     _output_time: *const AudioTimeStamp,
@@ -174,10 +177,16 @@ where
     unsafe {
         let client_data = &*(client_data as *mut ClientCallbackData<F>);
 
-        let buffers = std::slice::from_raw_parts_mut(
-            (*output).mBuffers.as_mut_ptr(),
-            (*output).mNumberBuffers as usize,
-        );
+        let buffers = match client_data.scope{
+            Scope::Input => std::slice::from_raw_parts_mut(
+                (*(input as *mut AudioBufferList)).mBuffers.as_mut_ptr(),
+                (*input).mNumberBuffers as usize,
+            ),
+            Scope::Output => std::slice::from_raw_parts_mut(
+                (*output).mBuffers.as_mut_ptr(),
+                (*output).mNumberBuffers as usize,
+            ),
+        };
 
         let audio_buffers: Vec<AudioBuffer> = buffers.iter_mut().map(|buf| {
             AudioBuffer {
