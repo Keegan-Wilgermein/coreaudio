@@ -30,6 +30,7 @@ where
 ///
 /// Each `AudioBuffer` covers one or more interleaved channels and is valid
 /// only for the duration of the callback invocation.
+#[derive(Debug)]
 pub struct AudioBuffer<'a> {
     /// Slice of output samples to fill. The length equals
     /// `frame_count * channels` for interleaved data, or `frame_count` for
