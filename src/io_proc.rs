@@ -20,7 +20,7 @@ use crate::{Scope, errors::{CoreAudioError, ErrorKind, OSStatusCheck}, object::{
 /// casting back inside `io_callback`.
 struct ClientCallbackData<F>
 where
-    F: FnMut(&[AudioBuffer]) + Send + 'static,
+    F: FnMut(&mut [AudioBuffer]) + Send + 'static,
 {
     /// The user-supplied audio render callback.
     callback: F,
@@ -36,13 +36,27 @@ pub struct AudioBuffer<'a> {
     /// Slice of output samples to fill. The length equals
     /// `frame_count * channels` for interleaved data, or `frame_count` for
     /// non-interleaved (one buffer per channel).
-    pub data: &'a mut [f32],
+    pub data: &'a [f32],
     /// Number of audio channels carried by this buffer.
-    pub channels: u32,
+    channels: u32,
     /// `true` if all channels share this buffer (interleaved layout).
-    pub is_interleaved: bool,
+    is_interleaved: bool,
     /// Number of audio frames in this I/O cycle.
-    pub frame_count: u32,
+    frame_count: u32,
+}
+
+impl<'a> AudioBuffer<'a> {
+    pub fn get_channels(&self) -> u32 {
+        self.channels
+    }
+
+    pub fn get_interleaved(&self) -> bool {
+        self.is_interleaved
+    }
+
+    pub fn get_frame_count(&self) -> u32 {
+        self.frame_count
+    }
 }
 
 /// A registered CoreAudio I/O procedure that drives audio rendering.
@@ -82,7 +96,7 @@ impl IOProc {
         callback: F,
     ) -> Result<Self, CoreAudioError>
     where
-        F: FnMut(&[AudioBuffer]) + Send + 'static,
+        F: FnMut(&mut [AudioBuffer]) + Send + 'static,
     {
         let client_data = ClientCallbackData {
             callback,
@@ -172,7 +186,7 @@ extern "C" fn io_callback<F>(
     client_data: *mut c_void,
 ) -> OSStatus
 where
-    F: FnMut(&[AudioBuffer]) + Send + 'static,
+    F: FnMut(&mut [AudioBuffer]) + Send + 'static,
 {
     unsafe {
         let client_data = &mut *(client_data as *mut ClientCallbackData<F>);
@@ -188,7 +202,7 @@ where
             ),
         };
 
-        let audio_buffers: Vec<AudioBuffer> = buffers.iter_mut().map(|buf| {
+        let mut audio_buffers: Vec<AudioBuffer> = buffers.iter_mut().map(|buf| {
             AudioBuffer {
                 data: std::slice::from_raw_parts_mut(
                     buf.mData as *mut f32,
@@ -200,7 +214,7 @@ where
             }
         }).collect();
 
-        (client_data.callback)(&audio_buffers)
+        (client_data.callback)(&mut audio_buffers)
     }
 
     0
