@@ -27,14 +27,6 @@ struct ClientCallbackData<T> {
     sender: Sender<T>,
 }
 
-impl<T> ClientCallbackData<T> {
-    /// Boxes `self` and returns a raw `*mut c_void` suitable for passing to
-    /// CoreAudio as client data.
-    fn as_c_void(&self) -> *mut c_void {
-        Box::into_raw(Box::from(self)) as *mut c_void
-    }
-}
-
 /// Watches a CoreAudio property for changes and delivers new values over a channel.
 ///
 /// The type parameters carry compile-time information about the property:
