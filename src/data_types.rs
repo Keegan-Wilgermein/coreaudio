@@ -298,26 +298,27 @@ impl SampleFormat {
     /// Unsigned formats are mapped to `[0, MAX]`; signed and float formats are
     /// mapped to `[-MAX, MAX]` and `[-1.0, 1.0]` respectively. Values outside
     /// `[-1.0, 1.0]` are clamped before conversion.
-    pub fn resample<T>(&self, sample: f32) -> T
+    pub fn resample<T>(&self, sample: impl Into<f64>) -> T
     where
         T: Copy + 'static,
         f64: AsPrimitive<T>,
     {
+        let sample = sample.into();
         let min = -1.0;
         let max = 1.0;
-        let half_max: f64 = max as f64 / 2.0;
-        let sample = sample.clamp(min, max) as f64;
+        let sample = sample.clamp(min, max);
 
         match self {
-            SampleFormat::U8 => ((sample * half_max + half_max) * u8::MAX as f64).as_(),
-            SampleFormat::U16 => ((sample * half_max + half_max) * u16::MAX as f64).as_(),
-            SampleFormat::U32 => ((sample * half_max + half_max) * u32::MAX as f64).as_(),
-            SampleFormat::I8 => (sample * i8::MAX as f64).as_(),
-            SampleFormat::I16 => (sample * i16::MAX as f64).as_(),
-            SampleFormat::I20 => (sample * I20_MAX as f64).as_(),
-            SampleFormat::I24 => (sample * I24_MAX as f64).as_(),
-            SampleFormat::I32 => (sample * i32::MAX as f64).as_(),
-            SampleFormat::I64 => (sample * i64::MAX as f64).as_(),
+            // 8, 16, and 32 come from the bit depth of the unsigned types
+            SampleFormat::U8 => ((sample * ((2^(8-1) - 1) + 2^(8-1)) as f64) * u8::MAX as f64).round().as_(),
+            SampleFormat::U16 => ((sample * ((2^(16-1) - 1) + 2^(16-1)) as f64) * u16::MAX as f64).round().as_(),
+            SampleFormat::U32 => ((sample * ((2^(32-1) - 1) + 2^(32-1)) as f64) * u32::MAX as f64).round().as_(),
+            SampleFormat::I8 => (sample * i8::MAX as f64).round().as_(),
+            SampleFormat::I16 => (sample * i16::MAX as f64).round().as_(),
+            SampleFormat::I20 => (sample * I20_MAX as f64).round().as_(),
+            SampleFormat::I24 => (sample * I24_MAX as f64).round().as_(),
+            SampleFormat::I32 => (sample * i32::MAX as f64).round().as_(),
+            SampleFormat::I64 => (sample * i64::MAX as f64).round().as_(),
             SampleFormat::F32 => sample.as_(),
             SampleFormat::F64 => sample.as_(),
         }
