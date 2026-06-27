@@ -292,45 +292,62 @@ impl SampleFormat {
         }
     }
 
-    /// Full-scale multiplier — stays f64 so the multiply is in float.
-    fn full_scale(&self) -> f64 {
-        match self {
-            SampleFormat::I8  => i8::MAX as f64,
-            SampleFormat::I16 => i16::MAX as f64,
-            SampleFormat::I20 => I20_MAX as f64,
-            SampleFormat::I24 => I24_MAX as f64,
-            SampleFormat::I32 => i32::MAX as f64,
-            SampleFormat::I64 => i64::MAX as f64,
-            SampleFormat::F32 | SampleFormat::F64 => 1.0,
-            // amplitude only — offset added below
-            SampleFormat::U8  => i8::MAX  as f64,
-            SampleFormat::U16 => i16::MAX as f64,
-            SampleFormat::U32 => i32::MAX as f64,
-        }
-    }
-
-    /// Converts a normalised `f32` sample in `[-1.0, 1.0]` into the target
-    /// numeric type `T` using the full range of this format.
+    /// Convert normalized f32 samples (`[-1.0, 1.0]`) into this format, writing
+    /// raw little-endian bytes into `dst`. `self` picks the output type — not the
+    /// caller — so it can't silently degrade to f32 like `resample::<T>` did.
     ///
-    /// Unsigned formats are mapped to `[0, MAX]`; signed and float formats are
-    /// mapped to `[-MAX, MAX]` and `[-1.0, 1.0]` respectively. Values outside
-    /// `[-1.0, 1.0]` are clamped before conversion.
-    pub fn resample<T>(&self, sample: f32) -> T
-    where
-        T: Copy + 'static,
-        f64: AsPrimitive<T>,
-    {
-        let scaled = sample.clamp(-1.0, 1.0) as f64 * self.full_scale();
-
+    /// `dst.len()` must be `src.len() * self.bytes_per_sample()`.
+    pub fn resample(&self, src: &[f32], dst: &mut [u8]) {
         match self {
-            // float passes through unrounded
-            SampleFormat::F32 | SampleFormat::F64 => scaled.as_(),
-            // unsigned: shift to the offset-binary midpoint (pure multiply can't do this)
-            SampleFormat::U8  => (scaled + (u8::MAX  as f64 + 1.0) / 2.0).round().as_(),
-            SampleFormat::U16 => (scaled + (u16::MAX as f64 + 1.0) / 2.0).round().as_(),
-            SampleFormat::U32 => (scaled + (u32::MAX as f64 + 1.0) / 2.0).round().as_(),
-            // signed ints: round to nearest
-            _ => scaled.round().as_(),
+            SampleFormat::F32 => for (s, d) in src.iter().zip(dst.chunks_exact_mut(4)) {
+                d.copy_from_slice(&s.to_le_bytes());
+            },
+            SampleFormat::F64 => for (s, d) in src.iter().zip(dst.chunks_exact_mut(8)) {
+                d.copy_from_slice(&(*s as f64).to_le_bytes());
+            },
+            SampleFormat::I8 => for (s, d) in src.iter().zip(dst.chunks_exact_mut(1)) {
+                d[0] = (s.clamp(-1.0, 1.0) as f64 * i8::MAX as f64).round() as i8 as u8;
+            },
+            SampleFormat::I16 => for (s, d) in src.iter().zip(dst.chunks_exact_mut(2)) {
+                let v = (s.clamp(-1.0, 1.0) as f64 * i16::MAX as f64).round() as i16;
+                d.copy_from_slice(&v.to_le_bytes());
+            },
+            SampleFormat::I20 => for (s, d) in src.iter().zip(dst.chunks_exact_mut(3)) {
+                let v = (s.clamp(-1.0, 1.0) as f64 * I20_MAX as f64).round() as i32;
+                d.copy_from_slice(&v.to_le_bytes()[..3]);                  // packing: CONFIRM
+            },
+            SampleFormat::I24 => for (s, d) in src.iter().zip(dst.chunks_exact_mut(3)) {
+                let v = (s.clamp(-1.0, 1.0) as f64 * I24_MAX as f64).round() as i32;
+                d.copy_from_slice(&v.to_le_bytes()[..3]);                  // packing: CONFIRM
+            },
+            SampleFormat::I32 => for (s, d) in src.iter().zip(dst.chunks_exact_mut(4)) {
+                let v = (s.clamp(-1.0, 1.0) as f64 * i32::MAX as f64).round() as i32;
+                d.copy_from_slice(&v.to_le_bytes());
+            },
+            SampleFormat::I64 => for (s, d) in src.iter().zip(dst.chunks_exact_mut(8)) {
+                let v = (s.clamp(-1.0, 1.0) as f64 * i64::MAX as f64).round() as i64;
+                d.copy_from_slice(&v.to_le_bytes());
+            },
+            SampleFormat::U8 => {
+                let mid = (u8::MAX as f64 + 1.0) / 2.0;
+                for (s, d) in src.iter().zip(dst.chunks_exact_mut(1)) {
+                    d[0] = (s.clamp(-1.0, 1.0) as f64 * (mid - 1.0) + mid).round() as u8;
+                }
+            },
+            SampleFormat::U16 => {
+                let mid = (u16::MAX as f64 + 1.0) / 2.0;
+                for (s, d) in src.iter().zip(dst.chunks_exact_mut(2)) {
+                    let v = (s.clamp(-1.0, 1.0) as f64 * (mid - 1.0) + mid).round() as u16;
+                    d.copy_from_slice(&v.to_le_bytes());
+                }
+            },
+            SampleFormat::U32 => {
+                let mid = (u32::MAX as f64 + 1.0) / 2.0;
+                for (s, d) in src.iter().zip(dst.chunks_exact_mut(4)) {
+                    let v = (s.clamp(-1.0, 1.0) as f64 * (mid - 1.0) + mid).round() as u32;
+                    d.copy_from_slice(&v.to_le_bytes());
+                }
+            },
         }
     }
 }
