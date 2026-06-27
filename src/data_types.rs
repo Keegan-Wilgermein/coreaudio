@@ -292,35 +292,45 @@ impl SampleFormat {
         }
     }
 
+    /// Full-scale multiplier — stays f64 so the multiply is in float.
+    fn full_scale(&self) -> f64 {
+        match self {
+            SampleFormat::I8  => i8::MAX as f64,
+            SampleFormat::I16 => i16::MAX as f64,
+            SampleFormat::I20 => I20_MAX as f64,
+            SampleFormat::I24 => I24_MAX as f64,
+            SampleFormat::I32 => i32::MAX as f64,
+            SampleFormat::I64 => i64::MAX as f64,
+            SampleFormat::F32 | SampleFormat::F64 => 1.0,
+            // amplitude only — offset added below
+            SampleFormat::U8  => i8::MAX  as f64,
+            SampleFormat::U16 => i16::MAX as f64,
+            SampleFormat::U32 => i32::MAX as f64,
+        }
+    }
+
     /// Converts a normalised `f32` sample in `[-1.0, 1.0]` into the target
     /// numeric type `T` using the full range of this format.
     ///
     /// Unsigned formats are mapped to `[0, MAX]`; signed and float formats are
     /// mapped to `[-MAX, MAX]` and `[-1.0, 1.0]` respectively. Values outside
     /// `[-1.0, 1.0]` are clamped before conversion.
-    pub fn resample<T>(&self, sample: impl Into<f64>) -> T
+    pub fn resample<T>(&self, sample: f32) -> T
     where
         T: Copy + 'static,
         f64: AsPrimitive<T>,
     {
-        let sample = sample.into();
-        let min = -1.0;
-        let max = 1.0;
-        let sample = sample.clamp(min, max);
+        let scaled = sample.clamp(-1.0, 1.0) as f64 * self.full_scale();
 
         match self {
-            // 8, 16, and 32 come from the bit depth of the unsigned types
-            SampleFormat::U8 => ((sample * ((2^(8-1) - 1) + 2^(8-1)) as f64) * u8::MAX as f64).round().as_(),
-            SampleFormat::U16 => ((sample * ((2^(16-1) - 1) + 2^(16-1)) as f64) * u16::MAX as f64).round().as_(),
-            SampleFormat::U32 => ((sample * ((2^(32-1) - 1) + 2^(32-1)) as f64) * u32::MAX as f64).round().as_(),
-            SampleFormat::I8 => (sample * i8::MAX as f64).round().as_(),
-            SampleFormat::I16 => (sample * i16::MAX as f64).round().as_(),
-            SampleFormat::I20 => (sample * I20_MAX as f64).round().as_(),
-            SampleFormat::I24 => (sample * I24_MAX as f64).round().as_(),
-            SampleFormat::I32 => (sample * i32::MAX as f64).round().as_(),
-            SampleFormat::I64 => (sample * i64::MAX as f64).round().as_(),
-            SampleFormat::F32 => sample.as_(),
-            SampleFormat::F64 => sample.as_(),
+            // float passes through unrounded
+            SampleFormat::F32 | SampleFormat::F64 => scaled.as_(),
+            // unsigned: shift to the offset-binary midpoint (pure multiply can't do this)
+            SampleFormat::U8  => (scaled + (u8::MAX  as f64 + 1.0) / 2.0).round().as_(),
+            SampleFormat::U16 => (scaled + (u16::MAX as f64 + 1.0) / 2.0).round().as_(),
+            SampleFormat::U32 => (scaled + (u32::MAX as f64 + 1.0) / 2.0).round().as_(),
+            // signed ints: round to nearest
+            _ => scaled.round().as_(),
         }
     }
 }
