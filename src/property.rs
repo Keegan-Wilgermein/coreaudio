@@ -1081,11 +1081,39 @@ Property::new(
 ///
 /// When muted the channel produces silence regardless of its volume setting.
 /// Listen to detect mute changes made by other processes or hardware buttons.
-pub const DEVICE_MUTE: Property<bool, Device, ReadWrite, Listenable, NeedElement> =
+pub const DEVICE_GLOBAL_MUTE: Property<bool, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioDevicePropertyMute,
         kAudioObjectPropertyScopeGlobal
+    ),
+    read_bool,
+    Some(encode_bool),
+);
+
+/// Whether the specified channel is muted.
+///
+/// When muted the channel produces silence regardless of its volume setting.
+/// Listen to detect mute changes made by other processes or hardware buttons.
+pub const DEVICE_OUTPUT_MUTE: Property<bool, Device, ReadWrite, Listenable, NeedElement> =
+Property::new(
+    address(
+        kAudioDevicePropertyMute,
+        kAudioObjectPropertyScopeOutput
+    ),
+    read_bool,
+    Some(encode_bool),
+);
+
+/// Whether the specified channel is muted.
+///
+/// When muted the channel produces silence regardless of its volume setting.
+/// Listen to detect mute changes made by other processes or hardware buttons.
+pub const DEVICE_INPUT_MUTE: Property<bool, Device, ReadWrite, Listenable, NeedElement> =
+Property::new(
+    address(
+        kAudioDevicePropertyMute,
+        kAudioObjectPropertyScopeInput
     ),
     read_bool,
     Some(encode_bool),
