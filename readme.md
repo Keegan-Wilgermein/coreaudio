@@ -11,6 +11,7 @@ This crate provides typed access to audio devices, streams, and system-level aud
 - **Property builder methods** — Properties that require an element (channel) or qualifier data expose `.for_element(n)` and `.with_qualifier(value)` builder methods. Forgetting to call them is a compile error.
 - **Property listeners** — Subscribe to property changes with `add_listener`, then poll with `latest()`, drain with `all_since_last_check()`, or block with `block_until_change()` / `block_for_duration()`.
 - **IO Procs** — Register audio render callbacks on devices with `add_io_proc` and control playback with `play()` / `pause()`.
+- **Channel layouts** — Read, write and listen to a device's speaker layout (`DEVICE_PREFERRED_CHANNEL_LAYOUT_OUTPUT`), expand predefined layouts with `layout_for_tag`, and get macOS's names for layouts and speakers.
 - **Structured error handling** — All CoreAudio `OSStatus` codes are mapped to a typed `ErrorKind` enum with human-readable four-character-code formatting.
 - **Format support** — Rich enums for audio format IDs (Linear PCM, AAC variants, ALAC, AC3, Opus, MP3, etc.), format flags, sample formats, transport types, terminal types, and sample resampling utilities.
 

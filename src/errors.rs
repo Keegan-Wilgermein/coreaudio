@@ -100,6 +100,8 @@ pub enum ErrorKind {
     PowerHintConversion,
     /// Failed to convert an `i32` to a [`HogMode`](crate::data_types::HogMode).
     HogModeConversion,
+    /// Failed to interpret bytes as an `AudioChannelLayout`.
+    ChannelLayoutConversion,
 
     // ---- Listener errors ------------
 

@@ -11,7 +11,7 @@
 // ---- Imports ------------
 use crate::{data_types::Scope, errors::{CoreAudioError, OSStatusCheck}, io_proc::{AudioBuffer, IOProc}, listener::PropertyListener, property::{DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Property, SYSTEM_DEFAULT_INPUT, SYSTEM_DEFAULT_OUTPUT, SYSTEM_DEVICES}, traits::{CanListen, HasAllData, ObjectCompatibleWith, Writeable}};
 use std::{ffi::c_void, marker::PhantomData, ptr::null};
-use coreaudio_sys::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectSetPropertyData, kAudioHardwareUnsupportedOperationError, kAudioObjectSystemObject};
+use coreaudio_sys::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectIsPropertySettable, AudioObjectSetPropertyData, kAudioHardwareUnsupportedOperationError, kAudioObjectSystemObject};
 
 // ---- Structs ------------
 
@@ -252,6 +252,21 @@ impl AudioObject<Device> {
         set_property_internal(self.id, property, value)
     }
 
+    /// Whether this device currently accepts writes to `property`.
+    ///
+    /// A [`ReadWrite`](crate::property::ReadWrite) property can still be
+    /// refused by a particular device; check this before offering an edit.
+    pub fn is_settable<V, D, A, L, E>(
+        &self,
+        property: Property<V, D, A, L, E>,
+    ) -> Result<bool, CoreAudioError>
+    where
+        D: ObjectCompatibleWith<Device>,
+        E: HasAllData,
+    {
+        is_settable_internal(self.id, property)
+    }
+
     /// Registers a listener for a device-scoped property.
     ///
     /// The property constant must be
@@ -418,4 +433,21 @@ fn set_property_internal<V, D, A, L, E>(
 
         Ok(())
     }
+}
+
+/// Asks whether the object identified by `id` accepts writes to `property`.
+fn is_settable_internal<V, D, A, L, E>(
+    id: AudioObjectID,
+    property: Property<V, D, A, L, E>,
+) -> Result<bool, CoreAudioError> {
+    let mut settable = 0u8;
+    unsafe {
+        AudioObjectIsPropertySettable(
+            id,
+            &property.address,
+            &mut settable,
+        ).check()?;
+    }
+
+    Ok(settable != 0)
 }

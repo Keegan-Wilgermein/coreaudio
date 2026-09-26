@@ -46,6 +46,7 @@
 // ---- Modules ------------
 pub mod data_types;
 pub mod errors;
+pub mod format;
 pub mod io_proc;
 pub mod listener;
 pub mod object;
@@ -58,6 +59,10 @@ pub mod traits;
 pub use data_types::{
     AACFormat,
     BufferFrameSizeRange,
+    ChannelDescription,
+    ChannelLabel,
+    ChannelLayout,
+    ChannelLayoutTag,
     ChannelPair,
     DBRange,
     FormatFlags,
@@ -78,6 +83,15 @@ pub use data_types::{
 pub use errors::{
     CoreAudioError,
     ErrorKind,
+};
+
+// Channel layout queries
+pub use format::{
+    channel_name,
+    channel_short_name,
+    layout_for_tag,
+    layout_name,
+    layout_simple_name,
 };
 
 // Objects
@@ -180,6 +194,8 @@ pub use property::{
     DEVICE_PLAY_THRU_DESTINATION,
     DEVICE_PLAY_THRU_DESTINATION_NAME,
     DEVICE_PLAY_THRU_DESTINATIONS,
+    DEVICE_PREFERRED_CHANNEL_LAYOUT_INPUT,
+    DEVICE_PREFERRED_CHANNEL_LAYOUT_OUTPUT,
     DEVICE_PREFERRED_CHANNELS_FOR_STEREO,
     DEVICE_PROCESSOR_OVERLOAD,
     DEVICE_RELATED_DEVICES,
