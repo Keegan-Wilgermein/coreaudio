@@ -53,24 +53,53 @@ pub struct ProcessTap {
 impl ProcessTap {
     /// Taps `processes` mixed down to stereo, named `name`, with `mute`
     /// applied to their own output. The tap is private to this process.
+    ///
+    /// The mixdown folds every channel of the processes' output into two, so
+    /// on a wide device (many channels, most of them silent) it comes out far
+    /// quieter than the processes actually play. Use
+    /// [`device_stream`](Self::device_stream) to capture them as they are.
     pub fn stereo_mixdown(
         processes: &[AudioObject<Process>],
         name: &str,
         mute: TapMute,
     ) -> Result<Self, CoreAudioError> {
-        let ids: Vec<_> = processes.iter().map(|process| NSNumber::new_u32(process.id())).collect();
-        let ids = NSArray::from_retained_slice(&ids);
+        let ids = process_ids(processes);
+        let description = unsafe {
+            CATapDescription::initStereoMixdownOfProcesses(CATapDescription::alloc(), &ids)
+        };
+        Self::create(&description, name, mute)
+    }
 
-        let mut id: AudioObjectID = 0;
-        unsafe {
-            let description = CATapDescription::initStereoMixdownOfProcesses(
+    /// Taps what `processes` play into stream `stream` of the device with UID
+    /// `device_uid`, channel for channel and at full level: the tap has that
+    /// stream's channels and runs at the device's rate. Named `name`, with
+    /// `mute` applied to their own output; private to this process.
+    pub fn device_stream(
+        processes: &[AudioObject<Process>],
+        device_uid: &str,
+        stream: usize,
+        name: &str,
+        mute: TapMute,
+    ) -> Result<Self, CoreAudioError> {
+        let ids = process_ids(processes);
+        let description = unsafe {
+            CATapDescription::initWithProcesses_andDeviceUID_withStream(
                 CATapDescription::alloc(),
                 &ids,
-            );
+                &NSString::from_str(device_uid),
+                stream as _,
+            )
+        };
+        Self::create(&description, name, mute)
+    }
+
+    fn create(description: &CATapDescription, name: &str, mute: TapMute) -> Result<Self, CoreAudioError> {
+        let mut id: AudioObjectID = 0;
+        unsafe {
             description.setName(&NSString::from_str(name));
             description.setPrivate(true);
             description.setMuteBehavior(mute.into());
-            AudioHardwareCreateProcessTap(Some(&description), &mut id).check()?;
+            AudioHardwareCreateProcessTap(Some(description), &mut id).check()?;
         }
 
         let tap = AudioObject::<Tap>::from(id);
@@ -95,6 +124,12 @@ impl ProcessTap {
     pub fn uid(&self) -> &str {
         &self.uid
     }
+}
+
+/// The process object IDs as the `NSArray<NSNumber>` a tap description takes.
+fn process_ids(processes: &[AudioObject<Process>]) -> objc2::rc::Retained<NSArray<NSNumber>> {
+    let ids: Vec<_> = processes.iter().map(|process| NSNumber::new_u32(process.id())).collect();
+    NSArray::from_retained_slice(&ids)
 }
 
 impl Drop for ProcessTap {

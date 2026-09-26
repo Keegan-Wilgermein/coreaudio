@@ -154,6 +154,8 @@ drop(tap);
 # Ok::<(), coreaudio::CoreAudioError>(())
 ```
 
+`stereo_mixdown` folds everything the processes play into two channels, which on a wide device (a 64-channel loopback, say, with most channels silent) comes out far quieter than they actually play. `ProcessTap::device_stream(&processes, device_uid, 0, name, mute)` instead taps what they play into one stream of a device, channel for channel at full level, with that stream's channel count and the device's rate.
+
 The aggregate is always private: only the creating process can see it, and macOS removes it if that process exits. Tapping needs the user's **System Audio Recording** permission (Privacy & Security). Without it a tap is still created but delivers silence, and a muting tap still mutes, so check the permission first.
 
 ### Properties that require an element or qualifier
