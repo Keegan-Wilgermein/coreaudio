@@ -1,6 +1,6 @@
 [package]
 name = "coreaudio"
-version = "0.2.25"
+version = "0.3.0"
 edition = "2024"
 description = "A safe and simple wrapper around the CoreAudio HAL"
 license = "MIT"
@@ -9,10 +9,19 @@ repository = "https://github.com/Keegan-Wilgermein/coreaudio"
 keywords = ["coreaudio", "audio", "hal", "macos", "device"]
 categories = ["multimedia::audio", "os::macos-apis"]
 
+[features]
+# Process taps (macOS 14.2+). Links the tap calls, so a binary built with it
+# won't launch on older macOS.
+process-tap = ["dep:objc2", "dep:objc2-foundation", "dep:objc2-core-audio"]
+
 [dependencies]
 core-foundation = "0.10.1"
 coreaudio-sys = "0.2.17"
 num-traits = "0.2.19"
+objc2 = { version = "0.6", optional = true }
+objc2-foundation = { version = "0.3", optional = true, default-features = false, features = ["std", "NSArray", "NSString", "NSValue"] }
+objc2-core-audio = { version = "0.3.2", optional = true, default-features = false, features = ["std", "AudioHardware", "objc2", "objc2-foundation"] }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-apple-darwin"]
+features = ["process-tap"]

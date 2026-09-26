@@ -7,7 +7,7 @@
 //! they can be used.
 
 // ---- Imports ------------
-use crate::{Device, Global, Property, SampleRateRange, Stream, System, property::{Listenable, NeedBoth, NeedElement, NeedQualifier, NoExtra, ReadWrite, encode_string, encode_u32, encode_vec_u32}};
+use crate::{Device, Global, Process, Property, SampleRateRange, Stream, System, Tap, property::{Listenable, NeedBoth, NeedElement, NeedQualifier, NoExtra, ReadWrite, encode_string, encode_u32, encode_vec_u32}};
 
 // ---- Traits ------------
 
@@ -17,6 +17,8 @@ use crate::{Device, Global, Property, SampleRateRange, Stream, System, property:
 /// - `System` and `Global` properties work with `AudioObject<System>`.
 /// - `Device` and `Global` properties work with `AudioObject<Device>`.
 /// - `Stream` and `Global` properties work with `AudioObject<Stream>`.
+/// - `Process` and `Global` properties work with `AudioObject<Process>`.
+/// - `Tap` and `Global` properties work with `AudioObject<Tap>`.
 #[diagnostic::on_unimplemented(
     message = "`{Self}` properties are incompatible with `AudioObject<{T}>`",
     label = "Use this with `AudioObject<{Self}>` instead",
@@ -26,10 +28,14 @@ pub trait ObjectCompatibleWith<T> {}
 impl ObjectCompatibleWith<System> for System {}
 impl ObjectCompatibleWith<Device> for Device {}
 impl ObjectCompatibleWith<Stream> for Stream {}
+impl ObjectCompatibleWith<Process> for Process {}
+impl ObjectCompatibleWith<Tap> for Tap {}
 
 impl ObjectCompatibleWith<System> for Global {}
 impl ObjectCompatibleWith<Device> for Global {}
 impl ObjectCompatibleWith<Stream> for Global {}
+impl ObjectCompatibleWith<Process> for Global {}
+impl ObjectCompatibleWith<Tap> for Global {}
 
 /// Asserts that a property's access mode permits writing.
 ///

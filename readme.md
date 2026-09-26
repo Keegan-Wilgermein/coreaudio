@@ -6,12 +6,13 @@ This crate provides typed access to audio devices, streams, and system-level aud
 
 ## Features
 
-- **Type-safe object model** — `AudioObject<System>`, `AudioObject<Device>`, and `AudioObject<Stream>` expose only the operations valid for each object type.
+- **Type-safe object model** — `AudioObject<System>`, `AudioObject<Device>`, `AudioObject<Stream>`, `AudioObject<Process>` and `AudioObject<Tap>` expose only the operations valid for each object type.
 - **Compile-time property safety** — Properties carry phantom types encoding their value type, owning object, read/write access, and listenability. Attempting to write a read-only property or listen to a non-listenable one is a compile error.
 - **Property builder methods** — Properties that require an element (channel) or qualifier data expose `.for_element(n)` and `.with_qualifier(value)` builder methods. Forgetting to call them is a compile error.
 - **Property listeners** — Subscribe to property changes with `add_listener`, then poll with `latest()`, drain with `all_since_last_check()`, or block with `block_until_change()` / `block_for_duration()`.
 - **Callback listeners** — `add_listener_with` hands every change straight to a closure on CoreAudio's notification thread, in order, with nothing blocking a thread to wait for it.
 - **IO Procs** — Register audio render callbacks on devices with `add_io_proc` and control playback with `play()` / `pause()`.
+- **Processes and taps** — List the processes using CoreAudio, and (with the `process-tap` feature) tap one app's audio before it's mixed, read through a private aggregate device like any input.
 - **Channel layouts** — Read, write and listen to a device's speaker layout (`DEVICE_PREFERRED_CHANNEL_LAYOUT_OUTPUT`), expand predefined layouts with `layout_for_tag`, and get macOS's names for layouts and speakers.
 - **Structured error handling** — All CoreAudio `OSStatus` codes are mapped to a typed `ErrorKind` enum with human-readable four-character-code formatting.
 - **Format support** — Rich enums for audio format IDs (Linear PCM, AAC variants, ALAC, AC3, Opus, MP3, etc.), format flags, sample formats, transport types, terminal types, and sample resampling utilities.
@@ -21,6 +22,7 @@ This crate provides typed access to audio devices, streams, and system-level aud
 - macOS (the crate is gated with `#[cfg(target_os = "macos")]`)
 - [`coreaudio-sys`](https://crates.io/crates/coreaudio-sys) for raw FFI bindings
 - [`core-foundation`](https://crates.io/crates/core-foundation) for `CFString` handling
+- macOS 14.2+ for process objects and taps. The optional `process-tap` feature adds [`objc2-core-audio`](https://crates.io/crates/objc2-core-audio) for `CATapDescription`; a binary built with it won't launch on older macOS
 
 ## Quick start
 
@@ -118,6 +120,41 @@ let listener = device.add_listener_with(DEVICE_NOMINAL_SAMPLE_RATE, move |rate| 
 // ... later
 drop(listener);
 ```
+
+### Tapping an app's audio
+
+Every process that has used CoreAudio has a process object. With the `process-tap` feature, `ProcessTap` captures what a set of processes output, mixed down to stereo, before it reaches any device. A tap has no IO of its own; `AggregateDevice::with_tap` wraps it in a private aggregate device, which is read with an ordinary IO proc.
+
+```rust
+use coreaudio::{
+    AggregateDevice, AudioObject, ProcessTap, Scope, System, TapMute,
+    PROCESS_BUNDLE_ID,
+};
+
+let system = AudioObject::<System>::default();
+let music: Vec<_> = system
+    .processes()?
+    .into_iter()
+    .filter(|process| process.get_property(PROCESS_BUNDLE_ID).is_ok_and(|id| id == "com.apple.Music"))
+    .collect();
+
+// Music goes silent while this is read, and plays normally again once it isn't.
+let tap = ProcessTap::stereo_mixdown(&music, "Music tap", TapMute::MutedWhenTapped)?;
+let aggregate = AggregateDevice::with_tap("Music tap", "com.example.music-tap", tap.uid())?;
+
+let mut proc = aggregate.device().add_io_proc(Scope::Input, |buffers| {
+    // Music's audio, interleaved stereo
+})?;
+proc.play()?;
+
+// Drop in this order: the IO proc, the aggregate, then the tap.
+drop(proc);
+drop(aggregate);
+drop(tap);
+# Ok::<(), coreaudio::CoreAudioError>(())
+```
+
+The aggregate is always private: only the creating process can see it, and macOS removes it if that process exits. Tapping needs the user's **System Audio Recording** permission (Privacy & Security). Without it a tap is still created but delivers silence, and a muting tap still mutes, so check the permission first.
 
 ### Properties that require an element or qualifier
 
@@ -352,12 +389,32 @@ Properties marked **both** require both calls (in either order).
 | `SYSTEM_CLOCK_DEVICE_LIST` | `Vec<u32>` | Read | Yes | — |
 | `SYSTEM_PLUGIN_LIST` | `Vec<u32>` | Read | Yes | — |
 | `SYSTEM_TAP_LIST` | `Vec<u32>` | Read | Yes | — |
+| `SYSTEM_PROCESS_OBJECT_LIST` | `Vec<u32>` | Read | Yes | — |
 | `SYSTEM_TRANSPORT_MANAGER_LIST` | `Vec<u32>` | Read | No | — |
 | `SYSTEM_TRANSLATE_UID_TO_DEVICE` | `u32` | Read | No | qualifier: `String` |
 | `SYSTEM_TRANSLATE_UID_TO_BOX` | `u32` | Read | No | qualifier: `String` |
 | `SYSTEM_TRANSLATE_UID_TO_CLOCK_DEVICE` | `u32` | Read | No | qualifier: `String` |
 | `SYSTEM_TRANSLATE_BUNDLE_ID_TO_PLUGIN` | `u32` | Read | No | qualifier: `String` |
 | `SYSTEM_TRANSLATE_BUNDLE_ID_TO_TRANSPORT_MANAGER` | `u32` | Read | No | qualifier: `String` |
+
+### Process properties
+
+| Constant | Type | Access | Listenable | Extra |
+|---|---|---|---|---|
+| `PROCESS_PID` | `i32` | Read | No | — |
+| `PROCESS_BUNDLE_ID` | `String` | Read | No | — |
+| `PROCESS_IS_RUNNING` | `bool` | Read | Yes | — |
+| `PROCESS_IS_RUNNING_INPUT` | `bool` | Read | Yes | — |
+| `PROCESS_IS_RUNNING_OUTPUT` | `bool` | Read | Yes | — |
+| `PROCESS_INPUT_DEVICES` | `Vec<u32>` | Read | Yes | — |
+| `PROCESS_OUTPUT_DEVICES` | `Vec<u32>` | Read | Yes | — |
+
+### Tap properties
+
+| Constant | Type | Access | Listenable | Extra |
+|---|---|---|---|---|
+| `TAP_UID` | `String` | Read | No | — |
+| `TAP_FORMAT` | `StreamDescription` | Read | Yes | — |
 
 ## Error handling
 

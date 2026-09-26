@@ -17,6 +17,10 @@
 //!   IO procs for audio rendering.
 //! - **[`AudioObject<Stream>`]** represents an individual stream on a device. Inspect
 //!   its virtual/physical format, direction, and latency.
+//! - **[`AudioObject<Process>`]** represents a process using CoreAudio (macOS 14.2+).
+//!   List them with `processes()` and read their PID, bundle ID and running state.
+//! - **[`AggregateDevice`]** is a private aggregate device; with the `process-tap`
+//!   feature, `ProcessTap` captures an app's audio and an aggregate makes it readable.
 //! - **[`Property`] constants** (e.g. [`DEVICE_NAME`], [`DEVICE_NOMINAL_SAMPLE_RATE`])
 //!   are passed to `get_property`, `set_property`, and `add_listener`. The type system
 //!   enforces that you can only write to read-write properties and only listen to
@@ -46,6 +50,7 @@
 #![cfg(target_os = "macos")]
 
 // ---- Modules ------------
+pub mod aggregate;
 pub mod data_types;
 pub mod errors;
 pub mod format;
@@ -53,6 +58,8 @@ pub mod io_proc;
 pub mod listener;
 pub mod object;
 pub mod property;
+#[cfg(feature = "process-tap")]
+pub mod tap;
 pub mod traits;
 
 // ---- Re-exports ------------
@@ -102,8 +109,17 @@ pub use object::{
     Device,
     Stream,
     System,
+    Process,
+    Tap,
     Global,
 };
+
+// Aggregate devices
+pub use aggregate::AggregateDevice;
+
+// Process taps
+#[cfg(feature = "process-tap")]
+pub use tap::{ProcessTap, TapMute};
 
 // Listener
 pub use listener::{CallbackListener, PropertyListener};
@@ -265,4 +281,22 @@ pub use property::{
     SYSTEM_UNLOADING_IS_ALLOWED,
     SYSTEM_USER_ID_CHANGED,
     SYSTEM_USER_SESSION_IS_ACTIVE_OR_HEADLESS,
+    SYSTEM_PROCESS_OBJECT_LIST,
+};
+
+// Property constants — Process
+pub use property::{
+    PROCESS_BUNDLE_ID,
+    PROCESS_INPUT_DEVICES,
+    PROCESS_IS_RUNNING,
+    PROCESS_IS_RUNNING_INPUT,
+    PROCESS_IS_RUNNING_OUTPUT,
+    PROCESS_OUTPUT_DEVICES,
+    PROCESS_PID,
+};
+
+// Property constants — Tap
+pub use property::{
+    TAP_FORMAT,
+    TAP_UID,
 };

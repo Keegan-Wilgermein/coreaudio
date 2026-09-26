@@ -2,14 +2,14 @@
 //!
 //! The central type is [`AudioObject<T>`], where `T` is a marker that selects
 //! which methods are available. The markers are [`System`], [`Device`],
-//! [`Stream`], and [`Global`]. Property access, listener registration, and I/O
+//! [`Stream`], [`Process`], [`Tap`], and [`Global`]. Property access, listener registration, and I/O
 //! proc creation are all gated through the type system so invalid operations
 //! are rejected at compile time.
 
 #![allow(unsafe_code)]
 
 // ---- Imports ------------
-use crate::{data_types::Scope, errors::{CoreAudioError, OSStatusCheck}, io_proc::{AudioBuffer, IOProc}, listener::{CallbackListener, PropertyListener}, property::{DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Property, SYSTEM_DEFAULT_INPUT, SYSTEM_DEFAULT_OUTPUT, SYSTEM_DEVICES}, traits::{CanListen, HasAllData, ObjectCompatibleWith, Writeable}};
+use crate::{data_types::Scope, errors::{CoreAudioError, OSStatusCheck}, io_proc::{AudioBuffer, IOProc}, listener::{CallbackListener, PropertyListener}, property::{DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Property, SYSTEM_DEFAULT_INPUT, SYSTEM_DEFAULT_OUTPUT, SYSTEM_DEVICES, SYSTEM_PROCESS_OBJECT_LIST}, traits::{CanListen, HasAllData, ObjectCompatibleWith, Writeable}};
 use std::{ffi::c_void, marker::PhantomData, ptr::null};
 use coreaudio_sys::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectIsPropertySettable, AudioObjectSetPropertyData, kAudioHardwareUnsupportedOperationError, kAudioObjectSystemObject};
 
@@ -43,6 +43,20 @@ pub struct Device;
 /// [`AudioObject::<Device>::streams_with_scope`].
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Stream;
+
+/// Marker for [`AudioObject`] granting access to process properties.
+///
+/// Every process that has used CoreAudio has a process object (macOS 14.2+).
+/// Obtain them from [`AudioObject::<System>::processes`].
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Process;
+
+/// Marker for [`AudioObject`] granting access to process tap properties.
+///
+/// A tap captures the audio a set of processes output (macOS 14.2+). Create
+/// one with `ProcessTap` (the `process-tap` feature).
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Tap;
 
 /// A CoreAudio HAL object identified by an `AudioObjectID`.
 ///
@@ -78,6 +92,26 @@ impl From<u32> for AudioObject<Device> {
 
 impl From<u32> for AudioObject<Stream> {
     /// Wraps a raw `AudioObjectID` as a stream object.
+    fn from(value: u32) -> Self {
+        Self {
+            id: value,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl From<u32> for AudioObject<Process> {
+    /// Wraps a raw `AudioObjectID` as a process object.
+    fn from(value: u32) -> Self {
+        Self {
+            id: value,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl From<u32> for AudioObject<Tap> {
+    /// Wraps a raw `AudioObjectID` as a tap object.
     fn from(value: u32) -> Self {
         Self {
             id: value,
@@ -123,6 +157,19 @@ impl AudioObject<System> {
 
             streams.map(|s: Vec<AudioObjectID>| !s.is_empty()).unwrap_or(false)
         }).collect())
+    }
+
+    /// Returns every process object the HAL knows: each process that has used
+    /// CoreAudio (macOS 14.2+). Listen to [`crate::SYSTEM_PROCESS_OBJECT_LIST`]
+    /// to hear processes come and go.
+    pub fn processes(&self) ->
+    Result<Vec<AudioObject<Process>>, CoreAudioError> {
+        Ok(
+            get_property_internal(self.id, SYSTEM_PROCESS_OBJECT_LIST)?
+            .iter()
+            .map(|id| AudioObject::<Process>::from(*id))
+            .collect()
+        )
     }
 
     /// Returns the device currently selected as the system default for `scope`.
@@ -409,6 +456,152 @@ impl AudioObject<Stream> {
     ) -> Result<CallbackListener<V, D, A>, CoreAudioError>
     where
         D: ObjectCompatibleWith<Stream>,
+        L: CanListen,
+        E: HasAllData,
+        S: Fn(Result<V, CoreAudioError>) + Send + Sync + 'static,
+    {
+        CallbackListener::try_new(self.id, property.address, property.read, sink)
+    }
+}
+
+// ---- Implementation on `AudioObject<Process>` --------------------------
+impl AudioObject<Process> {
+    /// Reads a process-scoped property value.
+    ///
+    /// The property constant's object type must be [`Process`] or [`Global`].
+    pub fn get_property<V, D, A, L, E>(
+        &self,
+        property: Property<V, D, A, L, E>,
+    ) -> Result<V, CoreAudioError>
+    where
+        D: ObjectCompatibleWith<Process>,
+        E: HasAllData,
+    {
+        get_property_internal(self.id, property)
+    }
+
+    /// Writes a process-scoped property value.
+    ///
+    /// The property constant must be [`ReadWrite`](crate::property::ReadWrite)
+    /// and its object type must be [`Process`] or [`Global`].
+    pub fn set_property<V, D, A, L, E>(
+        &self,
+        property: Property<V, D, A, L, E>,
+        value: V,
+    ) -> Result<(), CoreAudioError>
+    where
+        D: ObjectCompatibleWith<Process>,
+        A: Writeable,
+        E: HasAllData,
+    {
+        set_property_internal(self.id, property, value)
+    }
+
+    /// Registers a listener for a process-scoped property.
+    ///
+    /// The property constant must be
+    /// [`Listenable`](crate::property::Listenable) and its object type must be
+    /// [`Process`] or [`Global`]. Drop the returned [`PropertyListener`] to
+    /// unregister.
+    pub fn add_listener<V, D, A, L, E>(
+        &self,
+        property: Property<V, D, A, L, E>,
+    ) -> Result<PropertyListener<V, D, A>, CoreAudioError>
+    where
+        D: ObjectCompatibleWith<Process>,
+        L: CanListen,
+        E: HasAllData,
+    {
+        PropertyListener::try_new(self.id, property.address, property.read)
+    }
+
+    /// Registers a listener for a process-scoped property that calls `sink` on
+    /// every change.
+    ///
+    /// `sink` runs on CoreAudio's notification thread with the new value, or
+    /// the error reading it. The same property rules apply as for
+    /// [`add_listener`](Self::add_listener). Drop the returned
+    /// [`CallbackListener`] to unregister.
+    pub fn add_listener_with<V, D, A, L, E, S>(
+        &self,
+        property: Property<V, D, A, L, E>,
+        sink: S,
+    ) -> Result<CallbackListener<V, D, A>, CoreAudioError>
+    where
+        D: ObjectCompatibleWith<Process>,
+        L: CanListen,
+        E: HasAllData,
+        S: Fn(Result<V, CoreAudioError>) + Send + Sync + 'static,
+    {
+        CallbackListener::try_new(self.id, property.address, property.read, sink)
+    }
+}
+
+// ---- Implementation on `AudioObject<Tap>` --------------------------
+impl AudioObject<Tap> {
+    /// Reads a tap-scoped property value.
+    ///
+    /// The property constant's object type must be [`Tap`] or [`Global`].
+    pub fn get_property<V, D, A, L, E>(
+        &self,
+        property: Property<V, D, A, L, E>,
+    ) -> Result<V, CoreAudioError>
+    where
+        D: ObjectCompatibleWith<Tap>,
+        E: HasAllData,
+    {
+        get_property_internal(self.id, property)
+    }
+
+    /// Writes a tap-scoped property value.
+    ///
+    /// The property constant must be [`ReadWrite`](crate::property::ReadWrite)
+    /// and its object type must be [`Tap`] or [`Global`].
+    pub fn set_property<V, D, A, L, E>(
+        &self,
+        property: Property<V, D, A, L, E>,
+        value: V,
+    ) -> Result<(), CoreAudioError>
+    where
+        D: ObjectCompatibleWith<Tap>,
+        A: Writeable,
+        E: HasAllData,
+    {
+        set_property_internal(self.id, property, value)
+    }
+
+    /// Registers a listener for a tap-scoped property.
+    ///
+    /// The property constant must be
+    /// [`Listenable`](crate::property::Listenable) and its object type must be
+    /// [`Tap`] or [`Global`]. Drop the returned [`PropertyListener`] to
+    /// unregister.
+    pub fn add_listener<V, D, A, L, E>(
+        &self,
+        property: Property<V, D, A, L, E>,
+    ) -> Result<PropertyListener<V, D, A>, CoreAudioError>
+    where
+        D: ObjectCompatibleWith<Tap>,
+        L: CanListen,
+        E: HasAllData,
+    {
+        PropertyListener::try_new(self.id, property.address, property.read)
+    }
+
+    /// Registers a listener for a tap-scoped property that calls `sink` on
+    /// every change.
+    ///
+    /// `sink` runs on CoreAudio's notification thread with the new value, or
+    /// the error reading it. The same property rules apply as for
+    /// [`add_listener`](Self::add_listener). Drop the returned
+    /// [`CallbackListener`] to unregister.
+    pub fn add_listener_with<V, D, A, L, E, S>(
+        &self,
+        property: Property<V, D, A, L, E>,
+        sink: S,
+    ) -> Result<CallbackListener<V, D, A>, CoreAudioError>
+    where
+        D: ObjectCompatibleWith<Tap>,
         L: CanListen,
         E: HasAllData,
         S: Fn(Result<V, CoreAudioError>) + Send + Sync + 'static,
