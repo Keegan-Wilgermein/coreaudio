@@ -518,6 +518,35 @@ Property::new(
     None,
 );
 
+/// The display name of the specified input channel on a device.
+///
+/// Devices usually name their channels per scope, so the global
+/// `OBJECT_ELEMENT_NAME` often reads empty where this returns a name — e.g.
+/// "Channel 1" on an iPhone, or "Mic/Line 1" on an audio interface. Element 0
+/// names the device's input side as a whole.
+pub const DEVICE_INPUT_ELEMENT_NAME: Property<String, Device, ReadOnly, Silent, NeedElement> =
+Property::new(
+    address(
+        kAudioObjectPropertyElementName,
+        kAudioObjectPropertyScopeInput
+    ),
+    read_string,
+    None,
+);
+
+/// The display name of the specified output channel on a device.
+///
+/// The output-side counterpart of `DEVICE_INPUT_ELEMENT_NAME`.
+pub const DEVICE_OUTPUT_ELEMENT_NAME: Property<String, Device, ReadOnly, Silent, NeedElement> =
+Property::new(
+    address(
+        kAudioObjectPropertyElementName,
+        kAudioObjectPropertyScopeOutput
+    ),
+    read_string,
+    None,
+);
+
 /// The `AudioObjectID`s of all objects directly owned by this object, filtered by class.
 ///
 /// The qualifier is a list of `AudioClassID` values (`u32`). Only objects whose
@@ -1483,7 +1512,7 @@ Property::new(
 /// The LFE (subwoofer) channel volume as a linear scalar (`0.0` = silence, `1.0` = full scale).
 ///
 /// This controls the dedicated low-frequency effects channel separately from
-/// the main channel volumes. See `DEVICE_VOLUME_SCALAR` for the main channels.
+/// the main channel volumes. See `DEVICE_GLOBAL_VOLUME_SCALAR`, `DEVICE_INPUT_VOLUME_SCALAR` and `DEVICE_OUTPUT_VOLUME_SCALAR` for the main channels.
 pub const DEVICE_SUB_VOLUME_SCALAR: Property<f32, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
@@ -1550,7 +1579,7 @@ Property::new(
 /// Whether the LFE (subwoofer) channel is muted.
 ///
 /// Mutes only the low-frequency effects channel, leaving the main channels
-/// unaffected. See `DEVICE_MUTE` for per-channel muting.
+/// unaffected. See `DEVICE_GLOBAL_MUTE`, `DEVICE_INPUT_MUTE` and `DEVICE_OUTPUT_MUTE` for per-channel muting.
 pub const DEVICE_SUB_MUTE: Property<bool, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(

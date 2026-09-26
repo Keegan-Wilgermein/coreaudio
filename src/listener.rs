@@ -1,11 +1,15 @@
-//! Property change listeners backed by an MPSC channel.
+//! Property change listeners.
 //!
 //! A [`PropertyListener`] registers a CoreAudio property listener callback that
 //! reads the new property value and sends it over an internal channel. Callers
 //! can poll non-blocking with [`latest`](PropertyListener::latest), drain all
 //! pending events with [`all_since_last_check`](PropertyListener::all_since_last_check),
 //! or block until a change arrives with [`block_until_change`](PropertyListener::block_until_change).
-//! Dropping a `PropertyListener` automatically removes the CoreAudio listener.
+//!
+//! A [`CallbackListener`] instead hands every change straight to a closure on
+//! CoreAudio's notification thread, so nothing has to wait on a thread for it.
+//!
+//! Dropping either one automatically removes the CoreAudio listener.
 
 #![allow(unsafe_code)]
 
@@ -152,6 +156,105 @@ impl<T, D, A> PropertyListener<T, D, A> {
     }
 }
 
+/// Data shared between a [`CallbackListener`] and its C callback.
+struct SinkCallbackData<T> {
+    /// Function that deserialises raw bytes into a value of type `T`.
+    read: fn(&[u8]) -> Result<T, CoreAudioError>,
+    /// Called with every new value, or the error reading it.
+    sink: Box<dyn Fn(Result<T, CoreAudioError>) + Send + Sync>,
+}
+
+/// Watches a CoreAudio property and calls a closure on every change.
+///
+/// The closure runs on CoreAudio's notification thread, once per change, in
+/// the order CoreAudio reports them. It gets the property's new value, or the
+/// error reading it, so a failing property is seen rather than silently
+/// skipped. Keep it short: hand the value on to wherever the work happens.
+///
+/// Unlike [`PropertyListener`] this holds no channel, so nothing has to block
+/// a thread waiting for changes, and it can be moved between threads.
+///
+/// Obtain a `CallbackListener` by calling `add_listener_with` on an
+/// [`AudioObject`](crate::AudioObject). Dropping it removes the listener.
+pub struct CallbackListener<T, D, A> {
+    /// `AudioObjectID` this listener is registered on.
+    id: AudioObjectID,
+    /// Property address registered with CoreAudio.
+    address: AudioObjectPropertyAddress,
+    /// Shared callback context; kept alive for the duration of the listener.
+    callback_client_data: *mut SinkCallbackData<T>,
+    _device: PhantomData<D>,
+    _access: PhantomData<A>,
+}
+
+// The raw pointer is owned by the listener and only freed on drop, and the
+// sink it points to is `Send + Sync`.
+unsafe impl<T, D, A> Send for CallbackListener<T, D, A> {}
+unsafe impl<T, D, A> Sync for CallbackListener<T, D, A> {}
+
+impl<T, D, A> Drop for CallbackListener<T, D, A> {
+    fn drop(&mut self) {
+        unsafe {
+            AudioObjectRemovePropertyListener(
+                self.id,
+                &self.address,
+                Some(sink_callback::<T, D, A>),
+                self.callback_client_data as *mut c_void,
+            );
+            drop(Box::from_raw(self.callback_client_data));
+        }
+    }
+}
+
+impl<T, D, A> CallbackListener<T, D, A> {
+    /// Registers a property listener on the object identified by `id` that
+    /// calls `sink` on every change.
+    pub(crate) fn try_new<S>(
+        id: AudioObjectID,
+        address: AudioObjectPropertyAddress,
+        read: fn(&[u8]) -> Result<T, CoreAudioError>,
+        sink: S,
+    ) -> Result<Self, CoreAudioError>
+    where
+        S: Fn(Result<T, CoreAudioError>) + Send + Sync + 'static,
+    {
+        let callback_client_data = Box::into_raw(Box::new(SinkCallbackData {
+            read,
+            sink: Box::new(sink),
+        }));
+
+        let status = unsafe {
+            AudioObjectAddPropertyListener(
+                id,
+                &address,
+                Some(sink_callback::<T, D, A>),
+                callback_client_data as *mut c_void,
+            ).check()
+        };
+
+        if let Err(error) = status {
+            // Never registered, so nothing else holds the pointer.
+            drop(unsafe { Box::from_raw(callback_client_data) });
+            return Err(error);
+        }
+
+        Ok(Self {
+            id,
+            address,
+            callback_client_data,
+            _device: PhantomData,
+            _access: PhantomData,
+        })
+    }
+
+    /// Unregisters the listener and releases all associated resources.
+    ///
+    /// Equivalent to dropping `self`; provided for explicit, readable teardown.
+    pub fn remove(self) {
+        drop(self);
+    }
+}
+
 // ---- Functions ------------
 
 /// CoreAudio property listener callback.
@@ -184,4 +287,29 @@ unsafe extern "C" fn io_callback<T, D, A>(
         Ok(_) => 0,
         Err(_) => -1,
     }
+}
+
+/// CoreAudio property listener callback for a [`CallbackListener`].
+///
+/// Called by CoreAudio on a private thread whenever the watched property
+/// changes. Reads the new value and hands it, or the error reading it, to the
+/// listener's sink.
+unsafe extern "C" fn sink_callback<T, D, A>(
+    device_id: u32,
+    _queue: u32,
+    address: *const AudioObjectPropertyAddress,
+    client_data: *mut c_void,
+) -> OSStatus {
+    let client_data = unsafe {
+        &*(client_data as *mut SinkCallbackData<T>)
+    };
+
+    let property: Property<T, D, A, Listenable, NoExtra> = Property::new(
+        unsafe { *address },
+        client_data.read,
+        None,
+    );
+
+    (client_data.sink)(get_property_internal(device_id, property));
+    0
 }

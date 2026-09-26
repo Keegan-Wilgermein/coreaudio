@@ -9,7 +9,7 @@
 #![allow(unsafe_code)]
 
 // ---- Imports ------------
-use crate::{data_types::Scope, errors::{CoreAudioError, OSStatusCheck}, io_proc::{AudioBuffer, IOProc}, listener::PropertyListener, property::{DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Property, SYSTEM_DEFAULT_INPUT, SYSTEM_DEFAULT_OUTPUT, SYSTEM_DEVICES}, traits::{CanListen, HasAllData, ObjectCompatibleWith, Writeable}};
+use crate::{data_types::Scope, errors::{CoreAudioError, OSStatusCheck}, io_proc::{AudioBuffer, IOProc}, listener::{CallbackListener, PropertyListener}, property::{DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Property, SYSTEM_DEFAULT_INPUT, SYSTEM_DEFAULT_OUTPUT, SYSTEM_DEVICES}, traits::{CanListen, HasAllData, ObjectCompatibleWith, Writeable}};
 use std::{ffi::c_void, marker::PhantomData, ptr::null};
 use coreaudio_sys::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectIsPropertySettable, AudioObjectSetPropertyData, kAudioHardwareUnsupportedOperationError, kAudioObjectSystemObject};
 
@@ -184,6 +184,27 @@ impl AudioObject<System> {
     {
         PropertyListener::try_new(self.id, property.address, property.read)
     }
+
+    /// Registers a listener for a system-scoped property that calls `sink` on
+    /// every change.
+    ///
+    /// `sink` runs on CoreAudio's notification thread with the new value, or
+    /// the error reading it. The same property rules apply as for
+    /// [`add_listener`](Self::add_listener). Drop the returned
+    /// [`CallbackListener`] to unregister.
+    pub fn add_listener_with<V, D, A, L, E, S>(
+        &self,
+        property: Property<V, D, A, L, E>,
+        sink: S,
+    ) -> Result<CallbackListener<V, D, A>, CoreAudioError>
+    where
+        D: ObjectCompatibleWith<System>,
+        L: CanListen,
+        E: HasAllData,
+        S: Fn(Result<V, CoreAudioError>) + Send + Sync + 'static,
+    {
+        CallbackListener::try_new(self.id, property.address, property.read, sink)
+    }
 }
 
 // ---- Implementation on `AudioObject<Device>` --------------------------
@@ -285,6 +306,27 @@ impl AudioObject<Device> {
         PropertyListener::try_new(self.id, property.address, property.read)
     }
 
+    /// Registers a listener for a device-scoped property that calls `sink` on
+    /// every change.
+    ///
+    /// `sink` runs on CoreAudio's notification thread with the new value, or
+    /// the error reading it. The same property rules apply as for
+    /// [`add_listener`](Self::add_listener). Drop the returned
+    /// [`CallbackListener`] to unregister.
+    pub fn add_listener_with<V, D, A, L, E, S>(
+        &self,
+        property: Property<V, D, A, L, E>,
+        sink: S,
+    ) -> Result<CallbackListener<V, D, A>, CoreAudioError>
+    where
+        D: ObjectCompatibleWith<Device>,
+        L: CanListen,
+        E: HasAllData,
+        S: Fn(Result<V, CoreAudioError>) + Send + Sync + 'static,
+    {
+        CallbackListener::try_new(self.id, property.address, property.read, sink)
+    }
+
     /// Registers an audio render callback on this device and returns the
     /// resulting [`IOProc`].
     ///
@@ -351,6 +393,27 @@ impl AudioObject<Stream> {
         E: HasAllData,
     {
         PropertyListener::try_new(self.id, property.address, property.read)
+    }
+
+    /// Registers a listener for a stream-scoped property that calls `sink` on
+    /// every change.
+    ///
+    /// `sink` runs on CoreAudio's notification thread with the new value, or
+    /// the error reading it. The same property rules apply as for
+    /// [`add_listener`](Self::add_listener). Drop the returned
+    /// [`CallbackListener`] to unregister.
+    pub fn add_listener_with<V, D, A, L, E, S>(
+        &self,
+        property: Property<V, D, A, L, E>,
+        sink: S,
+    ) -> Result<CallbackListener<V, D, A>, CoreAudioError>
+    where
+        D: ObjectCompatibleWith<Stream>,
+        L: CanListen,
+        E: HasAllData,
+        S: Fn(Result<V, CoreAudioError>) + Send + Sync + 'static,
+    {
+        CallbackListener::try_new(self.id, property.address, property.read, sink)
     }
 }
 

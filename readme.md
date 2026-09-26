@@ -10,6 +10,7 @@ This crate provides typed access to audio devices, streams, and system-level aud
 - **Compile-time property safety** — Properties carry phantom types encoding their value type, owning object, read/write access, and listenability. Attempting to write a read-only property or listen to a non-listenable one is a compile error.
 - **Property builder methods** — Properties that require an element (channel) or qualifier data expose `.for_element(n)` and `.with_qualifier(value)` builder methods. Forgetting to call them is a compile error.
 - **Property listeners** — Subscribe to property changes with `add_listener`, then poll with `latest()`, drain with `all_since_last_check()`, or block with `block_until_change()` / `block_for_duration()`.
+- **Callback listeners** — `add_listener_with` hands every change straight to a closure on CoreAudio's notification thread, in order, with nothing blocking a thread to wait for it.
 - **IO Procs** — Register audio render callbacks on devices with `add_io_proc` and control playback with `play()` / `pause()`.
 - **Channel layouts** — Read, write and listen to a device's speaker layout (`DEVICE_PREFERRED_CHANNEL_LAYOUT_OUTPUT`), expand predefined layouts with `layout_for_tag`, and get macOS's names for layouts and speakers.
 - **Structured error handling** — All CoreAudio `OSStatus` codes are mapped to a typed `ErrorKind` enum with human-readable four-character-code formatting.
@@ -97,14 +98,47 @@ match listener.block_for_duration(Duration::from_secs(5)) {
 }
 ```
 
+### Calling a closure on every change
+
+`add_listener_with` skips the channel: every change is handed straight to a closure, in the order CoreAudio reports it, along with any error reading the new value. The closure runs on CoreAudio's notification thread, so keep it short and hand the value on to wherever the work happens. The returned `CallbackListener` can be moved between threads, and dropping it unregisters the listener.
+
+```rust
+use coreaudio::{AudioObject, System, Scope, DEVICE_NOMINAL_SAMPLE_RATE};
+use std::sync::mpsc;
+
+let system = AudioObject::<System>::default();
+let device = system.current_device(Scope::Output)?;
+
+let (tx, rx) = mpsc::channel();
+let listener = device.add_listener_with(DEVICE_NOMINAL_SAMPLE_RATE, move |rate| {
+    // `rate` is `Result<f64, CoreAudioError>`
+    let _ = tx.send(rate);
+})?;
+
+// ... later
+drop(listener);
+```
+
 ### Properties that require an element or qualifier
 
 Some properties target a specific channel (element) or need a qualifier value before they can be used. Call `.for_element()`, `.with_qualifier()`, or both — in either order — to complete the property. Forgetting is a compile error.
 
+Channel names are usually per direction, so read them with `DEVICE_INPUT_ELEMENT_NAME` or `DEVICE_OUTPUT_ELEMENT_NAME`; the global `OBJECT_ELEMENT_NAME` often reads empty on the same device.
+
+```rust
+use coreaudio::{AudioObject, System, Scope, DEVICE_INPUT_ELEMENT_NAME, MissingElement};
+
+let system = AudioObject::<System>::default();
+let device = system.current_device(Scope::Input)?;
+
+// e.g. "Channel 1" on an iPhone, "Mic/Line 1" on an audio interface
+let name: String = device.get_property(DEVICE_INPUT_ELEMENT_NAME.for_element(1))?;
+```
+
 ```rust
 use coreaudio::{
     AudioObject, System, Scope,
-    DEVICE_VOLUME_SCALAR, DEVICE_MUTE,
+    DEVICE_OUTPUT_VOLUME_SCALAR, DEVICE_OUTPUT_MUTE,
     DEVICE_DATA_SOURCE, DEVICE_DATA_SOURCE_NAME,
     MissingElement, MissingQualifier,
 };
@@ -112,11 +146,11 @@ use coreaudio::{
 let system = AudioObject::<System>::default();
 let device = system.current_device(Scope::Output)?;
 
-// Element-only: read the volume of channel 1
-let volume: f32 = device.get_property(DEVICE_VOLUME_SCALAR.for_element(1))?;
+// Element-only: read the output volume of channel 1
+let volume: f32 = device.get_property(DEVICE_OUTPUT_VOLUME_SCALAR.for_element(1))?;
 
-// Element-only: mute channel 1
-device.set_property(DEVICE_MUTE.for_element(1), true)?;
+// Element-only: mute output channel 1
+device.set_property(DEVICE_OUTPUT_MUTE.for_element(1), true)?;
 
 // Element-only: read the active data source on channel 1
 let source_id: u32 = device.get_property(DEVICE_DATA_SOURCE.for_element(1))?;
@@ -231,6 +265,8 @@ Properties marked **both** require both calls (in either order).
 | `DEVICE_HOG_MODE` | `HogMode` | Read/Write | Yes | — |
 | `DEVICE_RELATED_DEVICES` | `Vec<u32>` | Read | No | — |
 | `DEVICE_PREFERRED_CHANNELS_FOR_STEREO` | `ChannelPair` | Read/Write | No | — |
+| `DEVICE_PREFERRED_CHANNEL_LAYOUT_INPUT` | `ChannelLayout` | Read/Write | Yes | — |
+| `DEVICE_PREFERRED_CHANNEL_LAYOUT_OUTPUT` | `ChannelLayout` | Read/Write | Yes | — |
 | `DEVICE_PROCESSOR_OVERLOAD` | `u32` | Read | Yes | — |
 | `DEVICE_IO_STOPPED_ABNORMALLY` | `u32` | Read | Yes | — |
 | `DEVICE_IO_CYCLE_USAGE` | `f32` | Read/Write | No | — |
@@ -240,7 +276,11 @@ Properties marked **both** require both calls (in either order).
 | `DEVICE_PLAY_THRU_DESTINATION` | `u32` | Read/Write | Yes | — |
 | `DEVICE_PLAY_THRU_DESTINATIONS` | `Vec<u32>` | Read | No | — |
 | `DEVICE_PLAY_THRU_DESTINATION_NAME` | `String` | Read | No | qualifier: `u32` |
-| `DEVICE_VOLUME_SCALAR` | `f32` | Read/Write | Yes | element |
+| `DEVICE_INPUT_ELEMENT_NAME` | `String` | Read | No | element |
+| `DEVICE_OUTPUT_ELEMENT_NAME` | `String` | Read | No | element |
+| `DEVICE_GLOBAL_VOLUME_SCALAR` | `f32` | Read/Write | Yes | element |
+| `DEVICE_INPUT_VOLUME_SCALAR` | `f32` | Read/Write | Yes | element |
+| `DEVICE_OUTPUT_VOLUME_SCALAR` | `f32` | Read/Write | Yes | element |
 | `DEVICE_VOLUME_DECIBELS` | `f32` | Read/Write | Yes | element |
 | `DEVICE_VOLUME_RANGE_DECIBELS` | `DBRange` | Read | No | element |
 | `DEVICE_VOLUME_SCALAR_TO_DECIBELS` | `f32` | Read | No | element |
@@ -252,7 +292,9 @@ Properties marked **both** require both calls (in either order).
 | `DEVICE_SUB_VOLUME_DECIBELS_TO_SCALAR` | `f32` | Read | No | element |
 | `DEVICE_STEREO_PAN` | `f32` | Read/Write | Yes | element |
 | `DEVICE_STEREO_PAN_CHANNELS` | `ChannelPair` | Read | No | element |
-| `DEVICE_MUTE` | `bool` | Read/Write | Yes | element |
+| `DEVICE_GLOBAL_MUTE` | `bool` | Read/Write | Yes | element |
+| `DEVICE_INPUT_MUTE` | `bool` | Read/Write | Yes | element |
+| `DEVICE_OUTPUT_MUTE` | `bool` | Read/Write | Yes | element |
 | `DEVICE_SUB_MUTE` | `bool` | Read/Write | Yes | element |
 | `DEVICE_SOLO` | `bool` | Read/Write | Yes | element |
 | `DEVICE_PHANTOM_POWER` | `bool` | Read/Write | Yes | element |

@@ -23,6 +23,8 @@
 //!   listenable ones.
 //! - **[`PropertyListener`]** watches a property for changes, offering non-blocking,
 //!   blocking, and timeout-based polling.
+//! - **[`CallbackListener`]** watches a property and hands every change straight
+//!   to a closure, so nothing has to wait on a thread for it.
 //! - **[`IOProc`]** wraps a CoreAudio I/O procedure, letting you register an audio
 //!   render callback and control playback.
 //!
@@ -104,7 +106,7 @@ pub use object::{
 };
 
 // Listener
-pub use listener::PropertyListener;
+pub use listener::{CallbackListener, PropertyListener};
 
 // IO Proc
 pub use io_proc::{
@@ -220,6 +222,8 @@ pub use property::{
     DEVICE_OUTPUT_VOLUME_SCALAR,
     DEVICE_INPUT_VOLUME_SCALAR,
     DEVICE_VOLUME_SCALAR_TO_DECIBELS,
+    DEVICE_INPUT_ELEMENT_NAME,
+    DEVICE_OUTPUT_ELEMENT_NAME,
 };
 
 // Property constants — Stream
