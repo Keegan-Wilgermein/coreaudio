@@ -25,7 +25,16 @@ where
     /// The user-supplied audio render callback.
     callback: F,
     scope: Scope,
+    /// The buffers handed to `callback`, reused every cycle so the audio
+    /// thread never allocates. Its lifetime is a stand-in: it's only filled
+    /// for the length of one callback and cleared before returning.
+    buffers: Vec<AudioBuffer<'static>>,
 }
+
+/// Buffers reserved up front: more than any device presents per cycle (one
+/// per channel on the widest non-interleaved devices). A device with more
+/// grows it once, on its first cycle.
+const RESERVED_BUFFERS: usize = 256;
 
 /// A single output buffer delivered to the audio render callback.
 ///
@@ -101,6 +110,7 @@ impl IOProc {
         let client_data = ClientCallbackData {
             callback,
             scope,
+            buffers: Vec::with_capacity(RESERVED_BUFFERS),
         };
 
         let data_ptr = Box::into_raw(Box::new(client_data)) as *mut c_void;
@@ -202,7 +212,10 @@ where
             ),
         };
 
-        let mut audio_buffers: Vec<AudioBuffer> = buffers.iter_mut().map(|buf| {
+        // Reuses the reserved buffers rather than collecting a new Vec:
+        // allocating here can block past the IO deadline.
+        client_data.buffers.clear();
+        client_data.buffers.extend(buffers.iter_mut().map(|buf| {
             AudioBuffer {
                 data: std::slice::from_raw_parts_mut(
                     buf.mData as *mut f32,
@@ -212,9 +225,11 @@ where
                 is_interleaved: buf.mNumberChannels > 1,
                 frame_count: buf.mDataByteSize / (buf.mNumberChannels * size_of::<f32>() as u32),
             }
-        }).collect();
+        }));
 
-        (client_data.callback)(&mut audio_buffers)
+        (client_data.callback)(&mut client_data.buffers);
+        // Nothing may outlive the cycle that owns the memory.
+        client_data.buffers.clear();
     }
 
     0
