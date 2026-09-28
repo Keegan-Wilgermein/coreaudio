@@ -621,10 +621,10 @@ pub(crate) fn get_property_internal<V, D, A, L, E>(
     id: AudioObjectID,
     property: Property<V, D, A, L, E>,
  ) -> Result<V, CoreAudioError> {
-    let (q_len, q_data) = property.qualifier.map_or(
+    let (q_len, q_data) = property.qualifier.as_ref().map_or(
         (0, null()),
         |q| {
-            (q.len() as u32, q.as_ptr() as *const c_void)
+            (q.bytes.len() as u32, q.bytes.as_ptr() as *const c_void)
         }
     );
 
@@ -670,10 +670,10 @@ fn set_property_internal<V, D, A, L, E>(
             return Err(CoreAudioError::from(kAudioHardwareUnsupportedOperationError as i32));
         }
 
-        let (q_len, q_data) = property.qualifier.map_or(
+        let (q_len, q_data) = property.qualifier.as_ref().map_or(
             (0, null()),
             |q| {
-                (q.len() as u32, q.as_ptr() as *const c_void)
+                (q.bytes.len() as u32, q.bytes.as_ptr() as *const c_void)
             }
         );
 

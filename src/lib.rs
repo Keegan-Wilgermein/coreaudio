@@ -141,6 +141,7 @@ pub use property::{
     NeedElement,
     NeedQualifier,
     NeedBoth,
+    Qualifier,
 };
 
 // Traits

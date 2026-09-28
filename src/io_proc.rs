@@ -81,17 +81,41 @@ pub struct IOProc {
     proc_id: AudioDeviceIOProcID,
     /// Whether the device I/O cycle is currently running.
     is_running: bool,
+    /// The boxed `ClientCallbackData` handed to CoreAudio, and how to free it
+    /// (its closure type is erased here).
+    client_data: *mut c_void,
+    free_client_data: unsafe fn(*mut c_void),
 }
 
+// The client data is only touched by the IO thread while the proc runs, and
+// by `Drop` once it's stopped; the closure it holds is `Send`.
+unsafe impl Send for IOProc {}
+// No `&self` method touches the client data.
+unsafe impl Sync for IOProc {}
+
 impl Drop for IOProc {
+    /// Stops and unregisters the proc, then frees its callback and everything
+    /// it owns. Stopping from outside the IO thread returns only once the
+    /// callback is no longer running, so nothing can still be using it.
+    /// Never drop an `IOProc` from inside its own callback.
     fn drop(&mut self) {
         unsafe {
+            AudioDeviceStop(self.id, self.proc_id);
             AudioDeviceDestroyIOProcID(
                 self.id,
                 self.proc_id,
             );
+            (self.free_client_data)(self.client_data);
         }
     }
+}
+
+/// Frees a `ClientCallbackData<F>` boxed by `IOProc::try_new`.
+unsafe fn free_client_data<F>(data: *mut c_void)
+where
+    F: FnMut(&mut [AudioBuffer]) + Send + 'static,
+{
+    unsafe { drop(Box::from_raw(data as *mut ClientCallbackData<F>)) };
 }
 
 impl IOProc {
@@ -117,24 +141,31 @@ impl IOProc {
 
         let mut proc_id: AudioDeviceIOProcID = None;
 
-        unsafe {
+        let created = unsafe {
             AudioDeviceCreateIOProcID(
                 device.id(),
                 Some(io_callback::<F>),
                 data_ptr,
                 &mut proc_id,
-            ).check()?;
-
-            AudioDeviceStop(device.id(), proc_id).check()?;
+            ).check()
+        };
+        if let Err(error) = created {
+            // Never registered: nothing else holds the callback.
+            unsafe { free_client_data::<F>(data_ptr) };
+            return Err(error);
         }
 
-        Ok (
-            Self {
-                id: device.id(),
-                proc_id,
-                is_running: false,
-            }
-        )
+        // From here the proc owns the callback, and frees it when dropped.
+        let proc = Self {
+            id: device.id(),
+            proc_id,
+            is_running: false,
+            client_data: data_ptr,
+            free_client_data: free_client_data::<F>,
+        };
+        unsafe { AudioDeviceStop(device.id(), proc_id).check()? };
+
+        Ok(proc)
     }
 
     /// Starts the device I/O cycle, causing the callback to be invoked
@@ -201,29 +232,44 @@ where
     unsafe {
         let client_data = &mut *(client_data as *mut ClientCallbackData<F>);
 
-        let buffers = match client_data.scope{
-            Scope::Input => std::slice::from_raw_parts_mut(
-                (*(input as *mut AudioBufferList)).mBuffers.as_mut_ptr(),
-                (*input).mNumberBuffers as usize,
-            ),
-            Scope::Output => std::slice::from_raw_parts_mut(
-                (*output).mBuffers.as_mut_ptr(),
-                (*output).mNumberBuffers as usize,
-            ),
+        // The list for this proc's side; a device with nothing on that side
+        // passes none.
+        let list = match client_data.scope {
+            Scope::Input => input as *mut AudioBufferList,
+            Scope::Output => output,
+        };
+        let buffers: &mut [coreaudio_sys::AudioBuffer] = if list.is_null() {
+            &mut []
+        } else {
+            std::slice::from_raw_parts_mut(
+                (*list).mBuffers.as_mut_ptr(),
+                (*list).mNumberBuffers as usize,
+            )
         };
 
         // Reuses the reserved buffers rather than collecting a new Vec:
         // allocating here can block past the IO deadline.
         client_data.buffers.clear();
         client_data.buffers.extend(buffers.iter_mut().map(|buf| {
+            // A buffer with no memory or no channels carries no frames (and
+            // must not be divided by).
+            let empty = buf.mData.is_null() || buf.mNumberChannels == 0;
             AudioBuffer {
-                data: std::slice::from_raw_parts_mut(
-                    buf.mData as *mut f32,
-                    buf.mDataByteSize as usize / size_of::<f32>(),
-                ),
+                data: if empty {
+                    &mut []
+                } else {
+                    std::slice::from_raw_parts_mut(
+                        buf.mData as *mut f32,
+                        buf.mDataByteSize as usize / size_of::<f32>(),
+                    )
+                },
                 channels: buf.mNumberChannels,
                 is_interleaved: buf.mNumberChannels > 1,
-                frame_count: buf.mDataByteSize / (buf.mNumberChannels * size_of::<f32>() as u32),
+                frame_count: if empty {
+                    0
+                } else {
+                    buf.mDataByteSize / (buf.mNumberChannels * size_of::<f32>() as u32)
+                },
             }
         }));
 

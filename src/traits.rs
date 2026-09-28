@@ -7,7 +7,7 @@
 //! they can be used.
 
 // ---- Imports ------------
-use crate::{Device, Global, Process, Property, SampleRateRange, Stream, System, Tap, property::{Listenable, NeedBoth, NeedElement, NeedQualifier, NoExtra, ReadWrite, encode_string, encode_u32, encode_vec_u32}};
+use crate::{Device, Global, Process, Property, SampleRateRange, Stream, System, Tap, property::{Listenable, NeedBoth, NeedElement, NeedQualifier, NoExtra, Qualifier, ReadWrite, encode_u32, encode_vec_u32}};
 
 // ---- Traits ------------
 
@@ -88,6 +88,16 @@ pub trait IntoQualifierBytes {
     /// Serialises the qualifier value into a byte vector suitable for passing
     /// to CoreAudio.
     fn into_bytes(self) -> Vec<u8>;
+
+    /// The qualifier CoreAudio is handed. By default just `into_bytes`;
+    /// types CoreAudio takes by reference (strings, as a `CFStringRef`)
+    /// override it to keep what the bytes point to alive.
+    fn into_qualifier(self) -> Qualifier
+    where
+        Self: Sized,
+    {
+        Qualifier::from_bytes(self.into_bytes())
+    }
 }
 
 impl IntoQualifierBytes for u32 {
@@ -103,8 +113,15 @@ impl IntoQualifierBytes for Vec<u32> {
 }
 
 impl IntoQualifierBytes for String {
+    /// The text's UTF-8 bytes. CoreAudio takes string qualifiers as a
+    /// `CFStringRef`, which `into_qualifier` builds; this is only for callers
+    /// that want the raw text.
     fn into_bytes(self) -> Vec<u8> {
-        encode_string(self)
+        self.into()
+    }
+
+    fn into_qualifier(self) -> Qualifier {
+        Qualifier::from_string(&self)
     }
 }
 
@@ -140,7 +157,7 @@ impl<V, D, A, L, T> MissingQualifier<T> for Property<V, D, A, L, NeedQualifier<T
             self.encode,
         );
 
-        new.qualifier = Some(qualifier.into_bytes());
+        new.qualifier = Some(qualifier.into_qualifier());
         new
     }
 }
@@ -158,7 +175,7 @@ impl<V, D, A, L, T> MissingQualifier<T> for Property<V, D, A, L, NeedBoth<T>> {
             self.encode,
         );
 
-        new.qualifier = Some(qualifier.into_bytes());
+        new.qualifier = Some(qualifier.into_qualifier());
         new
     }
 }

@@ -64,8 +64,8 @@ pub struct Property<T, Object, Access, L, E> {
     /// Serialises a value of type `T` into bytes for `AudioObjectSetPropertyData`.
     /// `None` for read-only properties.
     pub(crate) encode: Option<fn(T) -> Vec<u8>>,
-    /// Optional qualifier bytes passed alongside the property address.
-    pub(crate) qualifier: Option<Vec<u8>>,
+    /// Optional qualifier passed alongside the property address.
+    pub(crate) qualifier: Option<Qualifier>,
     _object: PhantomData<Object>,
     _access: PhantomData<Access>,
     _listenable: PhantomData<L>,
@@ -113,9 +113,30 @@ fn read_string(bytes: &[u8]) -> Result<String, CoreAudioError> {
     Ok(cf_string.to_string())
 }
 
-/// Encodes a `String` as raw bytes for use as a qualifier.
-pub(crate) fn encode_string(value: String) -> Vec<u8> {
-    value.into()
+/// Qualifier data as CoreAudio takes it: the bytes, plus anything they point
+/// to, kept alive for as long as the property that carries them.
+pub struct Qualifier {
+    pub(crate) bytes: Vec<u8>,
+    /// A string qualifier is a `CFStringRef`: `bytes` holds the pointer, and
+    /// this holds the string it points to.
+    _string: Option<CFString>,
+}
+
+impl Qualifier {
+    /// Qualifier data that's just these bytes.
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        Self { bytes, _string: None }
+    }
+
+    /// A string qualifier: CoreAudio takes a `CFStringRef`, not the text.
+    pub(crate) fn from_string(value: &str) -> Self {
+        let string = CFString::new(value);
+        let pointer = string.as_concrete_TypeRef() as usize;
+        Self {
+            bytes: pointer.to_ne_bytes().to_vec(),
+            _string: Some(string),
+        }
+    }
 }
 
 /// Reads a `u32` from `bytes` and returns `true` if it is non-zero.
