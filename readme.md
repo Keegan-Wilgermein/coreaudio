@@ -123,7 +123,7 @@ drop(listener);
 
 ### Tapping an app's audio
 
-Every process that has used CoreAudio has a process object. With the `process-tap` feature, `ProcessTap` captures what a set of processes output, mixed down to stereo, before it reaches any device. A tap has no IO of its own; `AggregateDevice::with_tap` wraps it in a private aggregate device, which is read with an ordinary IO proc.
+Every process that has used CoreAudio has a process object. A tap has no IO of its own; `AggregateDevice::with_tap` wraps it in a private aggregate device, which is read with an ordinary IO proc.
 
 ```rust
 use coreaudio::{
@@ -138,23 +138,25 @@ let music: Vec<_> = system
     .filter(|process| process.get_property(PROCESS_BUNDLE_ID).is_ok_and(|id| id == "com.apple.Music"))
     .collect();
 
-// Music goes silent while this is read, and plays normally again once it isn't.
+// Sound goes silent while this is read, and plays normally again once it isn't.
 let tap = ProcessTap::stereo_mixdown(&music, "Music tap", TapMute::MutedWhenTapped)?;
 let aggregate = AggregateDevice::with_tap("Music tap", "com.example.music-tap", tap.uid())?;
 
 let mut proc = aggregate.device().add_io_proc(Scope::Input, |buffers| {
-    // Music's audio, interleaved stereo
+    // ... Your code here
 })?;
 proc.play()?;
 
-// Drop in this order: the IO proc, the aggregate, then the tap.
+// Drop in this order:
+// IO Proc
+// Aggregate device
+// Tap
 drop(proc);
 drop(aggregate);
 drop(tap);
-# Ok::<(), coreaudio::CoreAudioError>(())
 ```
 
-`stereo_mixdown` folds everything the processes play into two channels, which on a wide device (a 64-channel loopback, say, with most channels silent) comes out far quieter than they actually play. `ProcessTap::device_stream(&processes, device_uid, 0, name, mute)` instead taps what they play into one stream of a device, channel for channel at full level, with that stream's channel count and the device's rate.
+`stereo_mixdown` folds everything the processes play into two channels, which on a wide device comes out far quieter than they actually play. `ProcessTap::device_stream(&processes, device_uid, 0, name, mute)` instead taps what they play into one stream of a device, channel for channel at full level, with that stream's channel count and the device's rate.
 
 The aggregate is always private: only the creating process can see it, and macOS removes it if that process exits. Tapping needs the user's **System Audio Recording** permission (Privacy & Security). Without it a tap is still created but delivers silence, and a muting tap still mutes, so check the permission first.
 
@@ -441,9 +443,8 @@ The `FormatId` enum covers Linear PCM, AAC (Standard, HE, HEv2, LD, ELD, ELDv2, 
 
 ## Roadmap
 
-- Dedicated `AudioObject<Clock>`,  `AudioObject<Box>`, and `AudioObject<Tap>` with unique methods
+- Dedicated `AudioObject<Clock>` and `AudioObject<Box>` with unique methods
 - Add new wrappers and 'multi-properties' that combine multiple properties into one for things that shouldn't have to be seperate calls
-- Properties for device sample format
 
 ## Disclaimer
 Apple's documentation on what properties can be listened to is pretty much non existant.

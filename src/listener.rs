@@ -16,15 +16,41 @@
 // ---- Imports --------
 use std::{ffi::c_void, marker::PhantomData, sync::mpsc::{self, Receiver, RecvTimeoutError, Sender}, time::Duration};
 use coreaudio_sys::{AudioObjectAddPropertyListener, AudioObjectID, AudioObjectPropertyAddress, AudioObjectRemovePropertyListener, OSStatus};
-use crate::{Property, errors::{CoreAudioError, ErrorKind, OSStatusCheck}, object::get_property_internal, property::{Listenable, NoExtra}};
+use crate::{Property, data_types::PropertySize, errors::{CoreAudioError, ErrorKind, OSStatusCheck}, object::get_property_internal, property::{Listenable, NoExtra}};
 
 // ---- Structs ------------
+
+/// Listener data that both listeners share
+struct Listener<D, A> {
+    /// `AudioObjectID` this listener is registered on
+    id: AudioObjectID,
+    /// Property address registered with CoreAudio
+    address: AudioObjectPropertyAddress,
+    _device: PhantomData<D>,
+    _access: PhantomData<A>,
+}
+
+impl<D, A> Listener<D, A> {
+    fn new(
+        id: AudioObjectID,
+        address: AudioObjectPropertyAddress,
+    ) -> Self {
+        Self {
+            id,
+            address,
+            _device: PhantomData,
+            _access: PhantomData,
+        }
+    }
+}
 
 /// Data shared between the listener registration site and the C callback.
 ///
 /// Boxed and passed through the `*mut c_void` client-data pointer registered
 /// with CoreAudio. The callback recovers this by casting back from the pointer.
 struct ClientCallbackData<T> {
+    /// The size of the data
+    size: PropertySize,
     /// Function that deserialises raw bytes into a value of type `T`.
     read: fn(&[u8]) -> Result<T, CoreAudioError>,
     /// Sending end of the MPSC channel; the callback sends new values here.
@@ -40,24 +66,20 @@ struct ClientCallbackData<T> {
 ///
 /// Obtain a `PropertyListener` by calling `add_listener` on an [`AudioObject`](crate::AudioObject).
 pub struct PropertyListener<T, D, A> {
-    /// `AudioObjectID` this listener is registered on.
-    id: AudioObjectID,
-    /// Property address registered with CoreAudio.
-    address: AudioObjectPropertyAddress,
+    /// The listener information
+    listener: Listener<D, A>,
     /// Shared callback context; kept alive for the duration of the listener.
     callback_client_data: *mut ClientCallbackData<T>,
     /// Receiving end of the MPSC channel fed by the CoreAudio callback.
     receiver: Receiver<T>,
-    _device: PhantomData<D>,
-    _access: PhantomData<A>,
 }
 
 impl<T, D, A> Drop for PropertyListener<T, D, A> {
     fn drop(&mut self) {
         unsafe {
             AudioObjectRemovePropertyListener(
-                self.id,
-                &self.address,
+                self.listener.id,
+                &self.listener.address,
                 Some(io_callback::<T, D, A>),
                 self.callback_client_data as *mut c_void,
             );
@@ -73,12 +95,14 @@ impl<T, D, A> PropertyListener<T, D, A> {
     /// and is called inside the CoreAudio callback each time the property changes.
     pub(crate) fn try_new(
         id: AudioObjectID,
+        size: PropertySize,
         address: AudioObjectPropertyAddress,
         read: fn(&[u8]) -> Result<T, CoreAudioError>,
     ) -> Result<Self, CoreAudioError> {
         let (sender, receiver) = mpsc::channel::<T>();
 
         let callback_client_data = Box::into_raw(Box::new(ClientCallbackData {
+            size,
             read,
             sender,
         }));
@@ -93,12 +117,9 @@ impl<T, D, A> PropertyListener<T, D, A> {
         };
 
         Ok(Self {
-            id,
-            address,
+            listener: Listener::new(id, address),
             callback_client_data,
             receiver,
-            _device: PhantomData,
-            _access: PhantomData,
         })
     }
 
@@ -158,6 +179,8 @@ impl<T, D, A> PropertyListener<T, D, A> {
 
 /// Data shared between a [`CallbackListener`] and its C callback.
 struct SinkCallbackData<T> {
+    /// The size of the data
+    size: PropertySize,
     /// Function that deserialises raw bytes into a value of type `T`.
     read: fn(&[u8]) -> Result<T, CoreAudioError>,
     /// Called with every new value, or the error reading it.
@@ -177,14 +200,10 @@ struct SinkCallbackData<T> {
 /// Obtain a `CallbackListener` by calling `add_listener_with` on an
 /// [`AudioObject`](crate::AudioObject). Dropping it removes the listener.
 pub struct CallbackListener<T, D, A> {
-    /// `AudioObjectID` this listener is registered on.
-    id: AudioObjectID,
-    /// Property address registered with CoreAudio.
-    address: AudioObjectPropertyAddress,
+    /// The listener information
+    listener: Listener<D, A>,
     /// Shared callback context; kept alive for the duration of the listener.
     callback_client_data: *mut SinkCallbackData<T>,
-    _device: PhantomData<D>,
-    _access: PhantomData<A>,
 }
 
 // The raw pointer is owned by the listener and only freed on drop, and the
@@ -196,8 +215,8 @@ impl<T, D, A> Drop for CallbackListener<T, D, A> {
     fn drop(&mut self) {
         unsafe {
             AudioObjectRemovePropertyListener(
-                self.id,
-                &self.address,
+                self.listener.id,
+                &self.listener.address,
                 Some(sink_callback::<T, D, A>),
                 self.callback_client_data as *mut c_void,
             );
@@ -211,6 +230,7 @@ impl<T, D, A> CallbackListener<T, D, A> {
     /// calls `sink` on every change.
     pub(crate) fn try_new<S>(
         id: AudioObjectID,
+        size: PropertySize,
         address: AudioObjectPropertyAddress,
         read: fn(&[u8]) -> Result<T, CoreAudioError>,
         sink: S,
@@ -219,6 +239,7 @@ impl<T, D, A> CallbackListener<T, D, A> {
         S: Fn(Result<T, CoreAudioError>) + Send + Sync + 'static,
     {
         let callback_client_data = Box::into_raw(Box::new(SinkCallbackData {
+            size,
             read,
             sink: Box::new(sink),
         }));
@@ -239,11 +260,8 @@ impl<T, D, A> CallbackListener<T, D, A> {
         }
 
         Ok(Self {
-            id,
-            address,
+            listener: Listener::new(id, address),
             callback_client_data,
-            _device: PhantomData,
-            _access: PhantomData,
         })
     }
 
@@ -274,6 +292,7 @@ unsafe extern "C" fn io_callback<T, D, A>(
 
     let property: Property<T, D, A, Listenable, NoExtra> = Property::new(
         unsafe { *address },
+        client_data.size,
         client_data.read,
         None,
     );
@@ -306,6 +325,7 @@ unsafe extern "C" fn sink_callback<T, D, A>(
 
     let property: Property<T, D, A, Listenable, NoExtra> = Property::new(
         unsafe { *address },
+        client_data.size,
         client_data.read,
         None,
     );

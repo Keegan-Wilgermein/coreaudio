@@ -13,7 +13,7 @@
 #![allow(unsafe_code)]
 
 // ----- Imports ------------
-use crate::{Scope, data_types::{BufferFrameSizeRange, ChannelLayout, ChannelPair, DBRange, HogMode, PowerHint, SampleRateRange, StreamDescription, StreamRangedDescription, TerminalType, TransportType}, errors::{CoreAudioError, ErrorKind}, object::{Device, Global, Process, Stream, System, Tap}};
+use crate::{Scope, data_types::{BufferFrameSizeRange, ChannelLayout, ChannelPair, DBRange, HogMode, PowerHint, PropertySize, SampleRateRange, StreamDescription, StreamRangedDescription, TerminalType, TransportType}, errors::{CoreAudioError, ErrorKind}, object::{Device, Global, Process, Stream, System, Tap}};
 use std::marker::PhantomData;
 use core_foundation::{base::TCFType, string::{CFString, CFStringRef}};
 use coreaudio_sys::{
@@ -56,9 +56,12 @@ pub struct NeedBoth<T>(T);
 /// - `E` — readiness marker: [`NoExtra`] means the property is fully
 ///   specified; [`NeedElement`], [`NeedQualifier`], and [`NeedBoth`] indicate
 ///   that `.for_element()` or `.with_qualifier()` must be called first.
+#[derive(Clone)]
 pub struct Property<T, Object, Access, L, E> {
     /// CoreAudio address (selector, scope, element).
     pub(crate) address: AudioObjectPropertyAddress,
+    /// Whether the size of the property data is known or must be queried
+    pub(crate) size: PropertySize,
     /// Deserialises the raw byte buffer returned by CoreAudio into `T`.
     pub(crate) read: fn(&[u8]) -> Result<T, CoreAudioError>,
     /// Serialises a value of type `T` into bytes for `AudioObjectSetPropertyData`.
@@ -77,11 +80,13 @@ impl<T, Object, Access, L, E> Property<T, Object, Access, L, E> {
     /// encode function. The qualifier starts as `None`.
     pub(crate) const fn new(
         address: AudioObjectPropertyAddress,
+        size: PropertySize,
         read: fn(&[u8]) -> Result<T, CoreAudioError>,
         encode: Option<fn(T) -> Vec<u8>>,
     ) -> Self {
         Self {
             address,
+            size,
             read,
             encode,
             qualifier: None,
@@ -115,6 +120,7 @@ fn read_string(bytes: &[u8]) -> Result<String, CoreAudioError> {
 
 /// Qualifier data as CoreAudio takes it: the bytes, plus anything they point
 /// to, kept alive for as long as the property that carries them.
+#[derive(Clone)]
 pub struct Qualifier {
     pub(crate) bytes: Vec<u8>,
     /// A string qualifier is a `CFStringRef`: `bytes` holds the pointer, and
@@ -450,6 +456,7 @@ Property::new(
         kAudioObjectPropertyBaseClass,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     None,
 );
@@ -465,6 +472,7 @@ Property::new(
         kAudioObjectPropertyClass,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     None,
 );
@@ -479,6 +487,7 @@ Property::new(
         kAudioObjectPropertyOwner,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<AudioObjectID>() as u32),
     read_audio_object_id,
     None,
 );
@@ -493,6 +502,7 @@ Property::new(
         kAudioObjectPropertyModelName,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -504,6 +514,7 @@ Property::new(
         kAudioObjectPropertyManufacturer,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -519,6 +530,7 @@ Property::new(
         kAudioObjectPropertyElementName,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -533,6 +545,7 @@ Property::new(
         kAudioObjectPropertyElementCategoryName,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -547,6 +560,7 @@ Property::new(
         kAudioObjectPropertyElementNumberName,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -563,6 +577,7 @@ Property::new(
         kAudioObjectPropertyElementName,
         kAudioObjectPropertyScopeInput
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -576,6 +591,7 @@ Property::new(
         kAudioObjectPropertyElementName,
         kAudioObjectPropertyScopeOutput
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -591,6 +607,7 @@ Property::new(
         kAudioObjectPropertyOwnedObjects,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_vec_audio_object_id,
     None,
 );
@@ -606,6 +623,7 @@ Property::new(
         kAudioObjectPropertyCreator,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -622,6 +640,7 @@ Property::new(
         kAudioObjectPropertyName,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -638,6 +657,7 @@ Property::new(
         kAudioDevicePropertyDeviceUID,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -652,6 +672,7 @@ Property::new(
         kAudioDevicePropertyDeviceIsAlive,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     None,
 );
@@ -667,6 +688,7 @@ Property::new(
         kAudioDevicePropertyDeviceIsRunning,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     None,
 );
@@ -682,6 +704,7 @@ Property::new(
         kAudioDevicePropertyNominalSampleRate,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<f64>() as u32),
     read_f64,
     Some(encode_f64),
 );
@@ -697,6 +720,7 @@ Property::new(
         kAudioDevicePropertyAvailableNominalSampleRates,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_vec_sample_rate_range,
     None,
 );
@@ -713,6 +737,7 @@ Property::new(
         kAudioDevicePropertyBufferFrameSize,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     Some(encode_u32)
 );
@@ -727,6 +752,7 @@ Property::new(
         kAudioDevicePropertyBufferFrameSizeRange,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<AudioValueRange>() as u32),
     read_buffer_size_range,
     None,
 );
@@ -741,6 +767,7 @@ Property::new(
         kAudioDevicePropertyLatency,
         kAudioObjectPropertyScopeInput
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     None,
 );
@@ -755,6 +782,7 @@ Property::new(
         kAudioDevicePropertyLatency,
         kAudioObjectPropertyScopeOutput
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     None
 );
@@ -769,6 +797,7 @@ Property::new(
         kAudioDevicePropertyStreams,
         kAudioObjectPropertyScopeInput
     ),
+    PropertySize::Unknown,
     read_vec_audio_object_id,
     None,
 );
@@ -783,6 +812,7 @@ Property::new(
         kAudioDevicePropertyStreams,
         kAudioObjectPropertyScopeOutput
     ),
+    PropertySize::Unknown,
     read_vec_audio_object_id,
     None,
 );
@@ -798,6 +828,7 @@ Property::new(
         kAudioDevicePropertyHogMode,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<i32>() as u32),
     read_hog_mode,
     Some(encode_hog_mode)
 );
@@ -816,6 +847,7 @@ Property::new(
         kAudioDevicePropertyConfigurationApplication,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -831,6 +863,7 @@ Property::new(
         kAudioDevicePropertyModelUID,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -846,6 +879,7 @@ Property::new(
         kAudioDevicePropertyTransportType,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_transport_type,
     None,
 );
@@ -861,6 +895,7 @@ Property::new(
         kAudioDevicePropertyRelatedDevices,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_vec_audio_object_id,
     None,
 );
@@ -876,6 +911,7 @@ Property::new(
         kAudioDevicePropertyClockDomain,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     None,
 );
@@ -890,6 +926,7 @@ Property::new(
         kAudioDevicePropertyDeviceCanBeDefaultDevice,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     None,
 );
@@ -905,6 +942,7 @@ Property::new(
         kAudioDevicePropertyDeviceCanBeDefaultSystemDevice,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     None,
 );
@@ -920,6 +958,7 @@ Property::new(
         kAudioDevicePropertySafetyOffset,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     None,
 );
@@ -934,6 +973,7 @@ Property::new(
         kAudioDevicePropertyIsHidden,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     None,
 );
@@ -949,6 +989,7 @@ Property::new(
         kAudioDevicePropertyPreferredChannelsForStereo,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<[u32; 2]>() as u32),
     read_channel_pair,
     Some(encode_channel_pair),
 );
@@ -965,6 +1006,7 @@ Property::new(
         kAudioDevicePropertyPreferredChannelLayout,
         kAudioObjectPropertyScopeOutput
     ),
+    PropertySize::Unknown,
     read_channel_layout,
     Some(encode_channel_layout),
 );
@@ -978,6 +1020,7 @@ Property::new(
         kAudioDevicePropertyPreferredChannelLayout,
         kAudioObjectPropertyScopeInput
     ),
+    PropertySize::Unknown,
     read_channel_layout,
     Some(encode_channel_layout),
 );
@@ -995,6 +1038,7 @@ Property::new(
         kAudioDeviceProcessorOverload,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     None,
 );
@@ -1010,6 +1054,7 @@ Property::new(
         kAudioDevicePropertyIOStoppedAbnormally,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     None,
 );
@@ -1025,6 +1070,7 @@ Property::new(
         kAudioDevicePropertyIOCycleUsage,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
     Some(encode_f32),
 );
@@ -1040,6 +1086,7 @@ Property::new(
         kAudioDevicePropertyUsesVariableBufferFrameSizes,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     None,
 );
@@ -1055,6 +1102,7 @@ Property::new(
         kAudioDevicePropertyVolumeScalar,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
     Some(encode_f32),
 );
@@ -1071,6 +1119,7 @@ Property::new(
         kAudioDevicePropertyVolumeScalar,
         kAudioObjectPropertyScopeInput
     ),
+    PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
     Some(encode_f32),
 );
@@ -1087,6 +1136,7 @@ Property::new(
         kAudioDevicePropertyVolumeScalar,
         kAudioObjectPropertyScopeOutput
     ),
+    PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
     Some(encode_f32),
 );
@@ -1102,6 +1152,7 @@ Property::new(
         kAudioDevicePropertyVolumeDecibels,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
     Some(encode_f32),
 );
@@ -1116,6 +1167,7 @@ Property::new(
         kAudioDevicePropertyVolumeRangeDecibels,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<AudioValueRange>() as u32),
     read_db_range,
     None,
 );
@@ -1131,6 +1183,7 @@ Property::new(
         kAudioDevicePropertyVolumeScalarToDecibels,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
     None,
 );
@@ -1146,6 +1199,7 @@ Property::new(
         kAudioDevicePropertyVolumeDecibelsToScalar,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
     None,
 );
@@ -1160,6 +1214,7 @@ Property::new(
         kAudioDevicePropertyStereoPan,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
     Some(encode_f32),
 );
@@ -1174,6 +1229,7 @@ Property::new(
         kAudioDevicePropertyStereoPanChannels,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<[u32; 2]>() as u32),
     read_channel_pair,
     None,
 );
@@ -1188,6 +1244,7 @@ Property::new(
         kAudioDevicePropertyMute,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     Some(encode_bool),
 );
@@ -1202,6 +1259,7 @@ Property::new(
         kAudioDevicePropertyMute,
         kAudioObjectPropertyScopeOutput
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     Some(encode_bool),
 );
@@ -1216,6 +1274,7 @@ Property::new(
         kAudioDevicePropertyMute,
         kAudioObjectPropertyScopeInput
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     Some(encode_bool),
 );
@@ -1230,6 +1289,7 @@ Property::new(
         kAudioDevicePropertySolo,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     Some(encode_bool),
 );
@@ -1245,6 +1305,7 @@ Property::new(
         kAudioDevicePropertyPhantomPower,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     Some(encode_bool),
 );
@@ -1259,6 +1320,7 @@ Property::new(
         kAudioDevicePropertyPhaseInvert,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     Some(encode_bool),
 );
@@ -1274,6 +1336,7 @@ Property::new(
         kAudioDevicePropertyClipLight,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     Some(encode_bool),
 );
@@ -1289,6 +1352,7 @@ Property::new(
         kAudioDevicePropertyTalkback,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     Some(encode_bool),
 );
@@ -1304,6 +1368,7 @@ Property::new(
         kAudioDevicePropertyListenback,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     Some(encode_bool),
 );
@@ -1318,6 +1383,7 @@ Property::new(
         kAudioDevicePropertyJackIsConnected,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     None,
 );
@@ -1334,6 +1400,7 @@ Property::new(
         kAudioDevicePropertyDataSource,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     Some(encode_u32),
 );
@@ -1348,6 +1415,7 @@ Property::new(
         kAudioDevicePropertyDataSources,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_vec_audio_object_id,
     None,
 );
@@ -1363,6 +1431,7 @@ Property::new(
         kAudioDevicePropertyDataSourceNameForIDCFString,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -1378,6 +1447,7 @@ Property::new(
         kAudioDevicePropertyClockSource,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     Some(encode_u32),
 );
@@ -1392,6 +1462,7 @@ Property::new(
         kAudioDevicePropertyClockSources,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_vec_audio_object_id,
     None,
 );
@@ -1406,6 +1477,7 @@ Property::new(
         kAudioDevicePropertyClockSourceNameForIDCFString,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -1421,6 +1493,7 @@ Property::new(
         kAudioDevicePropertyPlayThruDestination,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     Some(encode_u32),
 );
@@ -1436,6 +1509,7 @@ Property::new(
         kAudioDevicePropertyPlayThruDestinations,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_vec_audio_object_id,
     None,
 );
@@ -1450,6 +1524,7 @@ Property::new(
         kAudioDevicePropertyPlayThruDestinationNameForIDCFString,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -1465,6 +1540,7 @@ Property::new(
         kAudioDevicePropertyChannelNominalLineLevel,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     Some(encode_u32),
 );
@@ -1480,6 +1556,7 @@ Property::new(
         kAudioDevicePropertyChannelNominalLineLevels,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_vec_audio_object_id,
     None,
 );
@@ -1494,6 +1571,7 @@ Property::new(
         kAudioDevicePropertyChannelNominalLineLevelNameForIDCFString,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -1509,6 +1587,7 @@ Property::new(
         kAudioDevicePropertyHighPassFilterSetting,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     Some(encode_u32),
 );
@@ -1524,6 +1603,7 @@ Property::new(
         kAudioDevicePropertyHighPassFilterSettings,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_vec_audio_object_id,
     None,
 );
@@ -1538,6 +1618,7 @@ Property::new(
         kAudioDevicePropertyHighPassFilterSettingNameForIDCFString,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -1552,6 +1633,7 @@ Property::new(
         kAudioDevicePropertySubVolumeScalar,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
     Some(encode_f32),
 );
@@ -1566,6 +1648,7 @@ Property::new(
         kAudioDevicePropertySubVolumeDecibels,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
     Some(encode_f32),
 );
@@ -1577,6 +1660,7 @@ Property::new(
         kAudioDevicePropertySubVolumeRangeDecibels,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<AudioValueRange>() as u32),
     read_db_range,
     None,
 );
@@ -1591,6 +1675,7 @@ Property::new(
         kAudioDevicePropertySubVolumeScalarToDecibels,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
     None,
 );
@@ -1605,6 +1690,7 @@ Property::new(
         kAudioDevicePropertySubVolumeDecibelsToScalar,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
     None,
 );
@@ -1619,6 +1705,7 @@ Property::new(
         kAudioDevicePropertySubMute,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     Some(encode_bool),
 );
@@ -1630,6 +1717,7 @@ Property::new(
         kAudioDevicePropertyStreamConfiguration,
         kAudioObjectPropertyScopeGlobal,
     ),
+    PropertySize::Known(size_of::<AudioStreamBasicDescription>() as u32),
     read_stream_description,
     None,
 );
@@ -1646,6 +1734,7 @@ Property::new(
         kAudioObjectPropertyName,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -1661,6 +1750,7 @@ Property::new(
         kAudioStreamPropertyIsActive,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     None,
 );
@@ -1676,6 +1766,7 @@ Property::new(
         kAudioStreamPropertyDirection,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_scope,
     None,
 );
@@ -1692,6 +1783,7 @@ Property::new(
         kAudioStreamPropertyVirtualFormat,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<AudioStreamBasicDescription>() as u32),
     read_stream_description,
     Some(encode_stream_description)
 );
@@ -1708,6 +1800,7 @@ Property::new(
         kAudioStreamPropertyPhysicalFormat,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<AudioStreamBasicDescription>() as u32),
     read_stream_description,
     Some(encode_stream_description)
 );
@@ -1724,6 +1817,7 @@ Property::new(
         kAudioStreamPropertyTerminalType,
         kAudioObjectPropertyScopeGlobal,
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_terminal_type,
     None,
 );
@@ -1739,6 +1833,7 @@ Property::new(
         kAudioStreamPropertyStartingChannel,
         kAudioObjectPropertyScopeGlobal,
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     None,
 );
@@ -1754,6 +1849,7 @@ Property::new(
         kAudioStreamPropertyAvailableVirtualFormats,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_vec_stream_ranged_description,
     None,
 );
@@ -1769,6 +1865,7 @@ Property::new(
         kAudioStreamPropertyAvailablePhysicalFormats,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_vec_stream_ranged_description,
     None,
 );
@@ -1784,6 +1881,7 @@ Property::new(
         kAudioStreamPropertyLatency,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     None,
 );
@@ -1797,6 +1895,7 @@ Property::new(
         kAudioObjectPropertyName,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -1811,7 +1910,9 @@ Property::new(
     address(
         kAudioHardwarePropertyDevices,
         kAudioObjectPropertyScopeGlobal
-    ), read_vec_audio_object_id,
+    ),
+    PropertySize::Unknown,
+    read_vec_audio_object_id,
     None,
 );
 
@@ -1826,6 +1927,7 @@ Property::new(
         kAudioHardwarePropertyDefaultInputDevice,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_audio_object_id,
     Some(encode_audio_object_id)
 );
@@ -1840,6 +1942,7 @@ Property::new(
         kAudioHardwarePropertyDefaultOutputDevice,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<AudioObjectID>() as u32),
     read_audio_object_id,
     Some(encode_audio_object_id)
 );
@@ -1854,6 +1957,7 @@ Property::new(
         kAudioHardwarePropertyBoxList,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_vec_audio_object_id,
     None,
 );
@@ -1868,6 +1972,7 @@ Property::new(
         kAudioHardwarePropertyClockDeviceList,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_vec_audio_object_id,
     None,
 );
@@ -1883,6 +1988,7 @@ Property::new(
         kAudioHardwarePropertyIsInitingOrExiting,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     None,
 );
@@ -1898,6 +2004,7 @@ Property::new(
         kAudioHardwarePropertySleepingIsAllowed,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     Some(encode_bool)
 );
@@ -1913,6 +2020,7 @@ Property::new(
         kAudioHardwarePropertyPlugInList,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_vec_audio_object_id,
     None,
 );
@@ -1928,6 +2036,7 @@ Property::new(
         kAudioHardwarePropertyPowerHint,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_power_hint,
     Some(encode_power_hint)
 );
@@ -1942,7 +2051,9 @@ Property::new(
     address(
         kAudioHardwarePropertyTapList,
         kAudioObjectPropertyScopeGlobal
-    ), read_vec_audio_object_id,
+    ),
+    PropertySize::Unknown,
+    read_vec_audio_object_id,
     None,
 );
 
@@ -1957,6 +2068,7 @@ Property::new(
         kAudioHardwarePropertyDefaultSystemOutputDevice,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_audio_object_id,
     Some(encode_audio_object_id),
 );
@@ -1972,6 +2084,7 @@ Property::new(
         kAudioHardwarePropertyTranslateUIDToDevice,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<AudioObjectID>() as u32),
     read_audio_object_id,
     None,
 );
@@ -1986,6 +2099,7 @@ Property::new(
         kAudioHardwarePropertyTranslateUIDToBox,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<AudioObjectID>() as u32),
     read_audio_object_id,
     None,
 );
@@ -2000,6 +2114,7 @@ Property::new(
         kAudioHardwarePropertyTranslateUIDToClockDevice,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<AudioObjectID>() as u32),
     read_audio_object_id,
     None,
 );
@@ -2014,6 +2129,7 @@ Property::new(
         kAudioHardwarePropertyTranslateBundleIDToPlugIn,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<AudioObjectID>() as u32),
     read_audio_object_id,
     None,
 );
@@ -2028,6 +2144,7 @@ Property::new(
         kAudioHardwarePropertyTranslateBundleIDToTransportManager,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<AudioObjectID>() as u32),
     read_audio_object_id,
     None,
 );
@@ -2043,6 +2160,7 @@ Property::new(
         kAudioHardwarePropertyTransportManagerList,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_vec_audio_object_id,
     None,
 );
@@ -2058,6 +2176,7 @@ Property::new(
         kAudioHardwarePropertyMixStereoToMono,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     Some(encode_bool),
 );
@@ -2073,6 +2192,7 @@ Property::new(
         kAudioHardwarePropertyProcessIsMaster,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     None,
 );
@@ -2089,6 +2209,7 @@ Property::new(
         kAudioHardwarePropertyUserIDChanged,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     Some(encode_u32),
 );
@@ -2105,6 +2226,7 @@ Property::new(
         kAudioHardwarePropertyProcessIsAudible,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     Some(encode_bool),
 );
@@ -2120,6 +2242,7 @@ Property::new(
         kAudioHardwarePropertyUnloadingIsAllowed,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     Some(encode_bool),
 );
@@ -2135,6 +2258,7 @@ Property::new(
         kAudioHardwarePropertyHogModeIsAllowed,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     Some(encode_bool),
 );
@@ -2151,6 +2275,7 @@ Property::new(
         kAudioHardwarePropertyUserSessionIsActiveOrHeadless,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     None,
 );
@@ -2166,6 +2291,7 @@ Property::new(
         kAudioHardwarePropertyServiceRestarted,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
     None,
 );
@@ -2185,6 +2311,7 @@ Property::new(
         kAudioHardwarePropertyProcessObjectList,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_vec_audio_object_id,
     None,
 );
@@ -2196,6 +2323,7 @@ Property::new(
         kAudioProcessPropertyPID,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<i32>() as u32),
     read_i32,
     None,
 );
@@ -2209,6 +2337,7 @@ Property::new(
         kAudioProcessPropertyBundleID,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -2220,6 +2349,7 @@ Property::new(
         kAudioProcessPropertyIsRunning,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     None,
 );
@@ -2231,6 +2361,7 @@ Property::new(
         kAudioProcessPropertyIsRunningInput,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     None,
 );
@@ -2242,6 +2373,7 @@ Property::new(
         kAudioProcessPropertyIsRunningOutput,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
     None,
 );
@@ -2253,6 +2385,7 @@ Property::new(
         kAudioProcessPropertyDevices,
         kAudioObjectPropertyScopeOutput
     ),
+    PropertySize::Unknown,
     read_vec_audio_object_id,
     None,
 );
@@ -2264,6 +2397,7 @@ Property::new(
         kAudioProcessPropertyDevices,
         kAudioObjectPropertyScopeInput
     ),
+    PropertySize::Unknown,
     read_vec_audio_object_id,
     None,
 );
@@ -2277,6 +2411,7 @@ Property::new(
         kAudioTapPropertyUID,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Unknown,
     read_string,
     None,
 );
@@ -2288,6 +2423,7 @@ Property::new(
         kAudioTapPropertyFormat,
         kAudioObjectPropertyScopeGlobal
     ),
+    PropertySize::Known(size_of::<AudioStreamBasicDescription>() as u32),
     read_stream_description,
     None,
 );

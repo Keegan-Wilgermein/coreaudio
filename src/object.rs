@@ -9,7 +9,7 @@
 #![allow(unsafe_code)]
 
 // ---- Imports ------------
-use crate::{data_types::Scope, errors::{CoreAudioError, OSStatusCheck}, io_proc::{AudioBuffer, IOProc}, listener::{CallbackListener, PropertyListener}, property::{DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Property, SYSTEM_DEFAULT_INPUT, SYSTEM_DEFAULT_OUTPUT, SYSTEM_DEVICES, SYSTEM_PROCESS_OBJECT_LIST}, traits::{CanListen, HasAllData, ObjectCompatibleWith, Writeable}};
+use crate::{data_types::{PropertySize, Scope}, errors::{CoreAudioError, OSStatusCheck}, io_proc::{AudioBuffer, IOProc}, listener::{CallbackListener, PropertyListener}, property::{DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Property, SYSTEM_DEFAULT_INPUT, SYSTEM_DEFAULT_OUTPUT, SYSTEM_DEVICES, SYSTEM_PROCESS_OBJECT_LIST}, traits::{CanListen, HasAllData, ObjectCompatibleWith, Writeable}};
 use std::{ffi::c_void, marker::PhantomData, ptr::null};
 use coreaudio_sys::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectSetPropertyData, kAudioHardwareUnsupportedOperationError, kAudioObjectSystemObject};
 
@@ -120,10 +120,95 @@ impl From<u32> for AudioObject<Tap> {
     }
 }
 
-impl<T> AudioObject<T> {
+impl<C> AudioObject<C> {
     /// Returns the raw `AudioObjectID` for this object.
     pub fn id(&self) -> u32 {
         self.id
+    }
+
+    /// Reads a property value scoped to `C` compatible AudioObjects
+    pub fn get_property<V, D, A, L, E>(
+        &self,
+        property: Property<V, D, A, L, E>,
+    ) -> Result<V, CoreAudioError>
+    where
+        D: ObjectCompatibleWith<C>,
+        E: HasAllData,
+    {
+        get_property_internal(self.id, property)
+    }
+
+    /// Returns the size in bytes of a property's data
+    ///
+    /// Uses the size recorded on the property when it is known, and otherwise
+    /// asks CoreAudio
+    pub fn get_property_data_size<V, D, A, L, E>(
+        &self,
+        property: Property<V, D, A, L, E>,
+    ) -> Result<u32, CoreAudioError>
+    where
+        D: ObjectCompatibleWith<C>,
+        E: HasAllData,
+    {
+        get_property_data_size_internal(self.id, &property)
+    }
+
+    /// Writes a property value scoped to `C` compatible AudioObjects
+    ///
+    /// The property constant must be [`ReadWrite`](crate::property::ReadWrite)
+    pub fn set_property<V, D, A, L, E>(
+        &self,
+        property: Property<V, D, A, L, E>,
+        value: V,
+    ) -> Result<(), CoreAudioError>
+    where
+        D: ObjectCompatibleWith<C>,
+        A: Writeable,
+        E: HasAllData,
+    {
+        set_property_internal(self.id, property, value)
+    }
+
+    /// Registers a listener for a property scoped to `C` compatible AudioObjects
+    ///
+    /// The property constant must be
+    /// [`Listenable`](crate::property::Listenable)
+    /// 
+    /// Drop the returned [`PropertyListener`] to
+    /// unregister
+    pub fn add_listener<V, D, A, L, E>(
+        &self,
+        property: Property<V, D, A, L, E>,
+    ) -> Result<PropertyListener<V, D, A>, CoreAudioError>
+    where
+        D: ObjectCompatibleWith<C>,
+        L: CanListen,
+        E: HasAllData,
+    {
+        PropertyListener::try_new(self.id, property.size, property.address, property.read)
+    }
+
+     /// Registers a listener for a property scoped to `C` compatible AudioObjects
+     /// 
+     /// Unlike a normal listener, it calls `sink` on each change
+    ///
+    /// `sink` runs on CoreAudio's notification thread with the new value, or
+    /// the error reading it. The same property rules apply as for
+    /// [`add_listener`](Self::add_listener)
+    /// 
+    /// Drop the returned [`CallbackListener`] to unregister.
+    pub fn add_listener_with<V, D, A, L, E, S>(
+        &self,
+        property: Property<V, D, A, L, E>,
+        sink: S,
+    ) -> Result<CallbackListener<V, D, A>, CoreAudioError>
+    where
+        D: ObjectCompatibleWith<C>,
+        L: CanListen,
+        E: HasAllData,
+        S: Fn(Result<V, CoreAudioError>) + Send + Sync + 'static,
+    {
+        CallbackListener::try_new(self.id, property.size, property.address, property.read, sink)
     }
 }
 
@@ -182,76 +267,6 @@ impl AudioObject<System> {
 
         Ok(AudioObject::<Device>::from(id))
     }
-
-    /// Reads a system-scoped property value.
-    ///
-    /// The property constant's object type must be [`System`] or [`Global`].
-    pub fn get_property<V, D, A, L, E>(
-        &self,
-        property: Property<V, D, A, L, E>,
-    ) -> Result<V, CoreAudioError>
-    where
-        D: ObjectCompatibleWith<System>,
-        E: HasAllData,
-    {
-        get_property_internal(self.id, property)
-    }
-
-    /// Writes a system-scoped property value.
-    ///
-    /// The property constant must be [`ReadWrite`](crate::property::ReadWrite)
-    /// and its object type must be [`System`] or [`Global`].
-    pub fn set_property<V, D, A, L, E>(
-        &self,
-        property: Property<V, D, A, L, E>,
-        value: V,
-    ) -> Result<(), CoreAudioError>
-    where
-        D: ObjectCompatibleWith<System>,
-        A: Writeable,
-        E: HasAllData,
-    {
-        set_property_internal(self.id, property, value)
-    }
-
-    /// Registers a listener for a system-scoped property.
-    ///
-    /// The property constant must be
-    /// [`Listenable`](crate::property::Listenable) and its object type must be
-    /// [`System`] or [`Global`]. Drop the returned [`PropertyListener`] to
-    /// unregister.
-    pub fn add_listener<V, D, A, L, E>(
-        &self,
-        property: Property<V, D, A, L, E>,
-    ) -> Result<PropertyListener<V, D, A>, CoreAudioError>
-    where
-        D: ObjectCompatibleWith<System>,
-        L: CanListen,
-        E: HasAllData,
-    {
-        PropertyListener::try_new(self.id, property.address, property.read)
-    }
-
-    /// Registers a listener for a system-scoped property that calls `sink` on
-    /// every change.
-    ///
-    /// `sink` runs on CoreAudio's notification thread with the new value, or
-    /// the error reading it. The same property rules apply as for
-    /// [`add_listener`](Self::add_listener). Drop the returned
-    /// [`CallbackListener`] to unregister.
-    pub fn add_listener_with<V, D, A, L, E, S>(
-        &self,
-        property: Property<V, D, A, L, E>,
-        sink: S,
-    ) -> Result<CallbackListener<V, D, A>, CoreAudioError>
-    where
-        D: ObjectCompatibleWith<System>,
-        L: CanListen,
-        E: HasAllData,
-        S: Fn(Result<V, CoreAudioError>) + Send + Sync + 'static,
-    {
-        CallbackListener::try_new(self.id, property.address, property.read, sink)
-    }
 }
 
 // ---- Implementation on `AudioObject<Device>` --------------------------
@@ -289,76 +304,6 @@ impl AudioObject<Device> {
         )
     }
 
-    /// Reads a device-scoped property value.
-    ///
-    /// The property constant's object type must be [`Device`] or [`Global`].
-    pub fn get_property<V, D, A, L, E>(
-        &self,
-        property: Property<V, D, A, L, E>,
-    ) -> Result<V, CoreAudioError>
-    where
-        D: ObjectCompatibleWith<Device>,
-        E: HasAllData,
-    {
-        get_property_internal(self.id, property)
-    }
-
-    /// Writes a device-scoped property value.
-    ///
-    /// The property constant must be [`ReadWrite`](crate::property::ReadWrite)
-    /// and its object type must be [`Device`] or [`Global`].
-    pub fn set_property<V, D, A, L, E>(
-        &self,
-        property: Property<V, D, A, L, E>,
-        value: V,
-    ) -> Result<(), CoreAudioError>
-    where
-        D: ObjectCompatibleWith<Device>,
-        A: Writeable,
-        E: HasAllData,
-    {
-        set_property_internal(self.id, property, value)
-    }
-
-    /// Registers a listener for a device-scoped property.
-    ///
-    /// The property constant must be
-    /// [`Listenable`](crate::property::Listenable) and its object type must be
-    /// [`Device`] or [`Global`]. Drop the returned [`PropertyListener`] to
-    /// unregister.
-    pub fn add_listener<V, D, A, L, E>(
-        &self,
-        property: Property<V, D, A, L, E>,
-    ) -> Result<PropertyListener<V, D, A>, CoreAudioError>
-    where
-        D: ObjectCompatibleWith<Device>,
-        L: CanListen,
-        E: HasAllData,
-    {
-        PropertyListener::try_new(self.id, property.address, property.read)
-    }
-
-    /// Registers a listener for a device-scoped property that calls `sink` on
-    /// every change.
-    ///
-    /// `sink` runs on CoreAudio's notification thread with the new value, or
-    /// the error reading it. The same property rules apply as for
-    /// [`add_listener`](Self::add_listener). Drop the returned
-    /// [`CallbackListener`] to unregister.
-    pub fn add_listener_with<V, D, A, L, E, S>(
-        &self,
-        property: Property<V, D, A, L, E>,
-        sink: S,
-    ) -> Result<CallbackListener<V, D, A>, CoreAudioError>
-    where
-        D: ObjectCompatibleWith<Device>,
-        L: CanListen,
-        E: HasAllData,
-        S: Fn(Result<V, CoreAudioError>) + Send + Sync + 'static,
-    {
-        CallbackListener::try_new(self.id, property.address, property.read, sink)
-    }
-
     /// Registers an audio render callback on this device and returns the
     /// resulting [`IOProc`].
     ///
@@ -377,223 +322,13 @@ impl AudioObject<Device> {
 }
 
 // ---- Implementation on `AudioObject<Stream>` --------------------------
-impl AudioObject<Stream> {
-    /// Reads a stream-scoped property value.
-    ///
-    /// The property constant's object type must be [`Stream`] or [`Global`].
-    pub fn get_property<V, D, A, L, E>(
-        &self,
-        property: Property<V, D, A, L, E>,
-    ) -> Result<V, CoreAudioError>
-    where
-        D: ObjectCompatibleWith<Stream>,
-        E: HasAllData,
-    {
-        get_property_internal(self.id, property)
-    }
-
-    /// Writes a stream-scoped property value.
-    ///
-    /// The property constant must be [`ReadWrite`](crate::property::ReadWrite)
-    /// and its object type must be [`Stream`] or [`Global`].
-    pub fn set_property<V, D, A, L, E>(
-        &self,
-        property: Property<V, D, A, L, E>,
-        value: V,
-    ) -> Result<(), CoreAudioError>
-    where
-        D: ObjectCompatibleWith<Stream>,
-        A: Writeable,
-        E: HasAllData,
-    {
-        set_property_internal(self.id, property, value)
-    }
-
-    /// Registers a listener for a stream-scoped property.
-    ///
-    /// The property constant must be
-    /// [`Listenable`](crate::property::Listenable) and its object type must be
-    /// [`Stream`] or [`Global`]. Drop the returned [`PropertyListener`] to
-    /// unregister.
-    pub fn add_listener<V, D, A, L, E>(
-        &self,
-        property: Property<V, D, A, L, E>,
-    ) -> Result<PropertyListener<V, D, A>, CoreAudioError>
-    where
-        D: ObjectCompatibleWith<Stream>,
-        L: CanListen,
-        E: HasAllData,
-    {
-        PropertyListener::try_new(self.id, property.address, property.read)
-    }
-
-    /// Registers a listener for a stream-scoped property that calls `sink` on
-    /// every change.
-    ///
-    /// `sink` runs on CoreAudio's notification thread with the new value, or
-    /// the error reading it. The same property rules apply as for
-    /// [`add_listener`](Self::add_listener). Drop the returned
-    /// [`CallbackListener`] to unregister.
-    pub fn add_listener_with<V, D, A, L, E, S>(
-        &self,
-        property: Property<V, D, A, L, E>,
-        sink: S,
-    ) -> Result<CallbackListener<V, D, A>, CoreAudioError>
-    where
-        D: ObjectCompatibleWith<Stream>,
-        L: CanListen,
-        E: HasAllData,
-        S: Fn(Result<V, CoreAudioError>) + Send + Sync + 'static,
-    {
-        CallbackListener::try_new(self.id, property.address, property.read, sink)
-    }
-}
+impl AudioObject<Stream> {}
 
 // ---- Implementation on `AudioObject<Process>` --------------------------
-impl AudioObject<Process> {
-    /// Reads a process-scoped property value.
-    ///
-    /// The property constant's object type must be [`Process`] or [`Global`].
-    pub fn get_property<V, D, A, L, E>(
-        &self,
-        property: Property<V, D, A, L, E>,
-    ) -> Result<V, CoreAudioError>
-    where
-        D: ObjectCompatibleWith<Process>,
-        E: HasAllData,
-    {
-        get_property_internal(self.id, property)
-    }
-
-    /// Writes a process-scoped property value.
-    ///
-    /// The property constant must be [`ReadWrite`](crate::property::ReadWrite)
-    /// and its object type must be [`Process`] or [`Global`].
-    pub fn set_property<V, D, A, L, E>(
-        &self,
-        property: Property<V, D, A, L, E>,
-        value: V,
-    ) -> Result<(), CoreAudioError>
-    where
-        D: ObjectCompatibleWith<Process>,
-        A: Writeable,
-        E: HasAllData,
-    {
-        set_property_internal(self.id, property, value)
-    }
-
-    /// Registers a listener for a process-scoped property.
-    ///
-    /// The property constant must be
-    /// [`Listenable`](crate::property::Listenable) and its object type must be
-    /// [`Process`] or [`Global`]. Drop the returned [`PropertyListener`] to
-    /// unregister.
-    pub fn add_listener<V, D, A, L, E>(
-        &self,
-        property: Property<V, D, A, L, E>,
-    ) -> Result<PropertyListener<V, D, A>, CoreAudioError>
-    where
-        D: ObjectCompatibleWith<Process>,
-        L: CanListen,
-        E: HasAllData,
-    {
-        PropertyListener::try_new(self.id, property.address, property.read)
-    }
-
-    /// Registers a listener for a process-scoped property that calls `sink` on
-    /// every change.
-    ///
-    /// `sink` runs on CoreAudio's notification thread with the new value, or
-    /// the error reading it. The same property rules apply as for
-    /// [`add_listener`](Self::add_listener). Drop the returned
-    /// [`CallbackListener`] to unregister.
-    pub fn add_listener_with<V, D, A, L, E, S>(
-        &self,
-        property: Property<V, D, A, L, E>,
-        sink: S,
-    ) -> Result<CallbackListener<V, D, A>, CoreAudioError>
-    where
-        D: ObjectCompatibleWith<Process>,
-        L: CanListen,
-        E: HasAllData,
-        S: Fn(Result<V, CoreAudioError>) + Send + Sync + 'static,
-    {
-        CallbackListener::try_new(self.id, property.address, property.read, sink)
-    }
-}
+impl AudioObject<Process> {}
 
 // ---- Implementation on `AudioObject<Tap>` --------------------------
-impl AudioObject<Tap> {
-    /// Reads a tap-scoped property value.
-    ///
-    /// The property constant's object type must be [`Tap`] or [`Global`].
-    pub fn get_property<V, D, A, L, E>(
-        &self,
-        property: Property<V, D, A, L, E>,
-    ) -> Result<V, CoreAudioError>
-    where
-        D: ObjectCompatibleWith<Tap>,
-        E: HasAllData,
-    {
-        get_property_internal(self.id, property)
-    }
-
-    /// Writes a tap-scoped property value.
-    ///
-    /// The property constant must be [`ReadWrite`](crate::property::ReadWrite)
-    /// and its object type must be [`Tap`] or [`Global`].
-    pub fn set_property<V, D, A, L, E>(
-        &self,
-        property: Property<V, D, A, L, E>,
-        value: V,
-    ) -> Result<(), CoreAudioError>
-    where
-        D: ObjectCompatibleWith<Tap>,
-        A: Writeable,
-        E: HasAllData,
-    {
-        set_property_internal(self.id, property, value)
-    }
-
-    /// Registers a listener for a tap-scoped property.
-    ///
-    /// The property constant must be
-    /// [`Listenable`](crate::property::Listenable) and its object type must be
-    /// [`Tap`] or [`Global`]. Drop the returned [`PropertyListener`] to
-    /// unregister.
-    pub fn add_listener<V, D, A, L, E>(
-        &self,
-        property: Property<V, D, A, L, E>,
-    ) -> Result<PropertyListener<V, D, A>, CoreAudioError>
-    where
-        D: ObjectCompatibleWith<Tap>,
-        L: CanListen,
-        E: HasAllData,
-    {
-        PropertyListener::try_new(self.id, property.address, property.read)
-    }
-
-    /// Registers a listener for a tap-scoped property that calls `sink` on
-    /// every change.
-    ///
-    /// `sink` runs on CoreAudio's notification thread with the new value, or
-    /// the error reading it. The same property rules apply as for
-    /// [`add_listener`](Self::add_listener). Drop the returned
-    /// [`CallbackListener`] to unregister.
-    pub fn add_listener_with<V, D, A, L, E, S>(
-        &self,
-        property: Property<V, D, A, L, E>,
-        sink: S,
-    ) -> Result<CallbackListener<V, D, A>, CoreAudioError>
-    where
-        D: ObjectCompatibleWith<Tap>,
-        L: CanListen,
-        E: HasAllData,
-        S: Fn(Result<V, CoreAudioError>) + Send + Sync + 'static,
-    {
-        CallbackListener::try_new(self.id, property.address, property.read, sink)
-    }
-}
+impl AudioObject<Tap> {}
 
 // ---- Functions -----------
 
@@ -606,23 +341,10 @@ pub(crate) fn get_property_internal<V, D, A, L, E>(
     id: AudioObjectID,
     property: Property<V, D, A, L, E>,
  ) -> Result<V, CoreAudioError> {
-    let (q_len, q_data) = property.qualifier.as_ref().map_or(
-        (0, null()),
-        |q| {
-            (q.bytes.len() as u32, q.bytes.as_ptr() as *const c_void)
-        }
-    );
+    let (q_len, q_data) = get_q_data_len(&property);
+    let mut size = get_property_data_size_internal(id, &property)?;
 
     unsafe {
-        let mut size = 0u32;
-        AudioObjectGetPropertyDataSize(
-            id,
-            &property.address,
-            q_len,
-            q_data,
-            &mut size,
-        ).check()?;
-
         let mut buffer = vec![0u8; size as usize];
         AudioObjectGetPropertyData(
             id,
@@ -655,12 +377,7 @@ fn set_property_internal<V, D, A, L, E>(
             return Err(CoreAudioError::from(kAudioHardwareUnsupportedOperationError as i32));
         }
 
-        let (q_len, q_data) = property.qualifier.as_ref().map_or(
-            (0, null()),
-            |q| {
-                (q.bytes.len() as u32, q.bytes.as_ptr() as *const c_void)
-            }
-        );
+        let (q_len, q_data) = get_q_data_len(&property);
 
         let size = out_data.len() as u32;
         AudioObjectSetPropertyData(
@@ -673,5 +390,44 @@ fn set_property_internal<V, D, A, L, E>(
         ).check()?;
 
         Ok(())
+    }
+}
+
+/// Gets the q_len and q_data as a tuple
+/// of ( q_len, q_data )
+fn get_q_data_len<V, D, A, L, E>(
+    property: &Property<V, D, A, L, E>,
+) -> (u32, *const c_void) {
+    property.qualifier.as_ref().map_or(
+        (0, null()),
+        |q| {
+            (q.bytes.len() as u32, q.bytes.as_ptr() as *const c_void)
+        }
+    )
+}
+
+/// Gets the size of the property data for a device
+fn get_property_data_size_internal<V, D, A, L, E>(
+    id: AudioObjectID,
+    property: &Property<V, D, A, L, E>,
+) -> Result<u32, CoreAudioError> {
+    let (q_len, q_data) = get_q_data_len(property);
+
+    match property.size {
+        PropertySize::Known(size) => Ok(size),
+        PropertySize::Unknown => {
+            unsafe {
+                let mut size = 0u32;
+                AudioObjectGetPropertyDataSize(
+                    id,
+                    &property.address,
+                    q_len,
+                    q_data,
+                    &mut size,
+                ).check()?;
+
+                Ok(size)
+            }
+        }
     }
 }

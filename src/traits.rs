@@ -153,6 +153,7 @@ impl<V, D, A, L, T> MissingQualifier<T> for Property<V, D, A, L, NeedQualifier<T
     {
         let mut new: Property<V, D, A, L, NoExtra> = Property::new(
             self.address,
+            self.size,
             self.read,
             self.encode,
         );
@@ -171,6 +172,7 @@ impl<V, D, A, L, T> MissingQualifier<T> for Property<V, D, A, L, NeedBoth<T>> {
     {
         let mut new: Property<V, D, A, L, NeedElement> = Property::new(
             self.address,
+            self.size,
             self.read,
             self.encode,
         );
@@ -203,6 +205,7 @@ impl<V, D, A, L> MissingElement for Property<V, D, A, L, NeedElement> {
     fn for_element(self, element: u32) -> Self::Output {
         let mut new: Property<V, D, A, L, NoExtra> = Property::new(
             self.address,
+            self.size,
             self.read,
             self.encode,
         );
@@ -219,6 +222,7 @@ impl<V, D, A, L, T> MissingElement for Property<V, D, A, L, NeedBoth<T>> {
     fn for_element(self, element: u32) -> Self::Output {
         let mut new: Property<V, D, A, L, NeedQualifier<T>> = Property::new(
             self.address,
+            self.size,
             self.read,
             self.encode,
         );
