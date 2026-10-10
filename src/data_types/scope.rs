@@ -23,6 +23,15 @@ impl TryFrom<u32> for Scope {
     }
 }
 
+impl From<Scope> for u32 {
+    fn from(value: Scope) -> Self {
+        match value {
+            Scope::Output => 0,
+            Scope::Input => 1,
+        }
+    }
+}
+
 /// Whether the size of the propery is known
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PropertySize {

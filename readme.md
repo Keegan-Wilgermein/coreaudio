@@ -11,6 +11,7 @@ This crate provides typed access to audio devices, streams, and system-level aud
 - **Property builder methods** — Properties that require an element (channel) or qualifier data expose `.for_element(n)` and `.with_qualifier(value)` builder methods. Forgetting to call them is a compile error.
 - **Property listeners** — Subscribe to property changes with `add_listener`, then poll with `latest()`, drain with `all_since_last_check()`, or block with `block_until_change()` / `block_for_duration()`.
 - **Callback listeners** — `add_listener_with` hands every change straight to a closure on CoreAudio's notification thread, in order, with nothing blocking a thread to wait for it.
+- **Force methods** — `force_set_property`, `force_add_listener` and `force_add_listener_with` skip the property checks for devices that don't follow the usual conventions.
 - **IO Procs** — Register audio render callbacks on devices with `add_io_proc` and control playback with `play()` / `pause()`.
 - **Processes and taps** — List the processes using CoreAudio, and (with the `process-tap` feature) tap one app's audio before it's mixed, read through a private aggregate device like any input.
 - **Channel layouts** — Read, write and listen to a device's speaker layout (`DEVICE_PREFERRED_CHANNEL_LAYOUT_OUTPUT`), expand predefined layouts with `layout_for_tag`, and get macOS's names for layouts and speakers.
@@ -203,6 +204,31 @@ let source_name: String = device.get_property(
         .with_qualifier(source_id)
 )?;
 println!("Active source: {source_name}");
+```
+
+### Bypassing the property checks
+
+The typed `get_property`, `set_property` and `add_listener` refuse properties the crate marks as unsupported. The markers describe what was tested, though some devices don't follow the usual conventions. The `force_` methods skip the checks and leave it to you to know the property behaves.
+
+- `force_set_property` skips the writable, element, qualifier and object-kind checks. It is `unsafe`, because a bad write can change a device in ways the crate can't predict.
+- `force_add_listener` and `force_add_listener_with` skip the `Listenable`, element, qualifier, and object-kind checks.
+
+The listener reads the property with no qualifier data, so a property that needs a qualifier fails to read. `force_add_listener_with` hands that error to your closure, so use it when you aren't sure the property works.
+
+```rust
+use coreaudio::{AudioObject, System, Scope, DEVICE_CAN_BE_DEFAULT, DEVICE_OUTPUT_VOLUME_SCALAR};
+
+let system = AudioObject::<System>::default();
+let device = system.current_device(Scope::Output)?;
+
+// `DEVICE_CAN_BE_DEFAULT` is not marked `Listenable`, so `add_listener` won't take it.
+let listener = unsafe { device.force_add_listener_with(DEVICE_CAN_BE_DEFAULT, |value| {
+    // `value` is `Result<bool, CoreAudioError>`
+    println!("{value:?}");
+})}?;
+
+// Writes the main element without going through `.for_element()`.
+unsafe { device.force_set_property(DEVICE_OUTPUT_VOLUME_SCALAR, 0.5)?; }
 ```
 
 ### Working with streams

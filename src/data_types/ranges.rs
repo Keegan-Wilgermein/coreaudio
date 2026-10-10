@@ -27,6 +27,15 @@ impl From<AudioValueRange> for BufferFrameSizeRange {
     }
 }
 
+impl From<BufferFrameSizeRange> for AudioValueRange {
+    fn from(value: BufferFrameSizeRange) -> Self {
+        Self {
+            mMinimum: value.min as f64,
+            mMaximum: value.max as f64,
+        }
+    }
+}
+
 impl BufferFrameSizeRange {
     /// Returns all power-of-two values between `min` and `max` inclusive.
     ///
@@ -65,6 +74,15 @@ impl From<AudioValueRange> for SampleRateRange {
     }
 }
 
+impl From<SampleRateRange> for AudioValueRange {
+    fn from(value: SampleRateRange) -> Self {
+        Self {
+            mMinimum: value.min,
+            mMaximum: value.max,
+        }
+    }
+}
+
 impl SampleRateRange {
     /// Gets the minimum supported sample rate
     pub fn get_min(&self) -> f64 {
@@ -94,6 +112,15 @@ impl From<AudioValueRange> for DBRange {
         Self {
             min: value.mMinimum,
             max: value.mMaximum,
+        }
+    }
+}
+
+impl From<DBRange> for AudioValueRange {
+    fn from(value: DBRange) -> Self {
+        Self {
+            mMinimum: value.min,
+            mMaximum: value.max,
         }
     }
 }

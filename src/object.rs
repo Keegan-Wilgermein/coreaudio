@@ -11,7 +11,7 @@
 // ---- Imports ------------
 use crate::{data_types::{PropertySize, Scope}, errors::{CoreAudioError, OSStatusCheck}, io_proc::{AudioBuffer, IOProc}, listener::{CallbackListener, PropertyListener}, property::{DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Property, SYSTEM_DEFAULT_INPUT, SYSTEM_DEFAULT_OUTPUT, SYSTEM_DEVICES, SYSTEM_PROCESS_OBJECT_LIST}, traits::{CanListen, HasAllData, ObjectCompatibleWith, Writeable}};
 use std::{ffi::c_void, marker::PhantomData, ptr::null};
-use coreaudio_sys::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectSetPropertyData, kAudioHardwareUnsupportedOperationError, kAudioObjectSystemObject};
+use coreaudio_sys::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectSetPropertyData, kAudioObjectSystemObject};
 
 // ---- Structs ------------
 
@@ -210,6 +210,80 @@ impl<C> AudioObject<C> {
     {
         CallbackListener::try_new(self.id, property.size, property.address, property.read, sink)
     }
+
+    /// Forcefully sets the property's value
+    /// 
+    /// Use this if you have to interact with a
+    /// device that doesn't follow the normal conventions
+    /// 
+    /// Unlike the normal property setter, this version
+    /// will ignore whether the property is
+    /// - Writable
+    /// - Has an element
+    /// - Has qualifier data
+    /// - Is being called on the correct kind of device
+    /// 
+    /// This leaves it up to the caller to confirm all of these
+    /// 
+    /// The function will still return a `CoreAudioError` if it
+    /// fails for any reason instead of crashing,
+    /// but it will not be able to say why
+    pub unsafe fn force_set_property<V, D, A, L, E>(
+        &self,
+        property: Property<V, D, A, L, E>,
+        value: V,
+    ) -> Result<(), CoreAudioError> {
+        set_property_internal(self.id, property, value)
+    }
+
+    /// Forcefully registers a listener for a property
+    ///
+    /// Use this if you have to interact with a
+    /// device that doesn't follow the normal conventions
+    ///
+    /// Unlike the normal listener, this version
+    /// will ignore whether the property is
+    /// - [`Listenable`](crate::property::Listenable)
+    /// - Has an element
+    /// - Is being called on the correct kind of device
+    ///
+    /// CoreAudio accepts a listener on any property, so this
+    /// can't misbehave, but it may never fire. It's up to the
+    /// caller to know the property really does notify.
+    ///
+    /// The listener reads the property with no qualifier data, so
+    /// properties that need a qualifier will fail to read. Use
+    /// [`force_add_listener_with`](Self::force_add_listener_with)
+    /// to see those errors.
+    ///
+    /// Drop the returned [`PropertyListener`] to unregister
+    pub unsafe fn force_add_listener<V, D, A, L, E>(
+        &self,
+        property: Property<V, D, A, L, E>,
+    ) -> Result<PropertyListener<V, D, A>, CoreAudioError> {
+        PropertyListener::try_new(self.id, property.size, property.address, property.read)
+    }
+
+    /// Forcefully registers a listener for a property that calls `sink` on each change
+    ///
+    /// The same rules are ignored as for
+    /// [`force_add_listener`](Self::force_add_listener)
+    ///
+    /// `sink` runs on CoreAudio's notification thread with the new value, or
+    /// the error reading it, so a property that can't be read is seen
+    /// rather than silently skipped
+    ///
+    /// Drop the returned [`CallbackListener`] to unregister
+    pub unsafe fn force_add_listener_with<V, D, A, L, E, S>(
+        &self,
+        property: Property<V, D, A, L, E>,
+        sink: S,
+    ) -> Result<CallbackListener<V, D, A>, CoreAudioError>
+    where
+        S: Fn(Result<V, CoreAudioError>) + Send + Sync + 'static,
+    {
+        CallbackListener::try_new(self.id, property.size, property.address, property.read, sink)
+    }
 }
 
 // ---- Implementation on `AudioObject<System>` --------------------------
@@ -362,31 +436,26 @@ pub(crate) fn get_property_internal<V, D, A, L, E>(
 /// Writes a property value to the object identified by `id`.
 ///
 /// Calls `property.encode` to serialise `value` to bytes, then passes those
-/// bytes to `AudioObjectSetPropertyData`. Returns an error if the property has
-/// no encoder (i.e. is read-only).
-fn set_property_internal<V, D, A, L, E>(
+/// bytes to `AudioObjectSetPropertyData`. Ignores the access marker: CoreAudio
+/// decides whether the write is allowed.
+pub(crate) fn set_property_internal<V, D, A, L, E>(
     id: AudioObjectID,
     property: Property<V, D, A, L, E>,
     value: V,
 ) -> Result<(), CoreAudioError> {
     unsafe {
-        let out_data;
-        if let Some(function) = property.encode {
-            out_data = function(value)
-        } else {
-            return Err(CoreAudioError::from(kAudioHardwareUnsupportedOperationError as i32));
-        }
+        let out_data = (property.encode)(value);
 
         let (q_len, q_data) = get_q_data_len(&property);
 
-        let size = out_data.len() as u32;
+        let size = out_data.bytes.len() as u32;
         AudioObjectSetPropertyData(
             id,
             &property.address,
             q_len,
             q_data,
             size,
-            out_data.as_ptr() as *const c_void,
+            out_data.bytes.as_ptr() as *const c_void,
         ).check()?;
 
         Ok(())
@@ -398,12 +467,14 @@ fn set_property_internal<V, D, A, L, E>(
 fn get_q_data_len<V, D, A, L, E>(
     property: &Property<V, D, A, L, E>,
 ) -> (u32, *const c_void) {
-    property.qualifier.as_ref().map_or(
-        (0, null()),
-        |q| {
-            (q.bytes.len() as u32, q.bytes.as_ptr() as *const c_void)
-        }
-    )
+    property.qualifier
+        .as_ref()
+        .map_or(
+            (0, null()),
+            |q| {
+                (q.bytes.len() as u32, q.bytes.as_ptr() as *const c_void)
+            }
+        )
 }
 
 /// Gets the size of the property data for a device

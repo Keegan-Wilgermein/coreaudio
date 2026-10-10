@@ -7,7 +7,7 @@
 //! they can be used.
 
 // ---- Imports ------------
-use crate::{Device, Global, Process, Property, SampleRateRange, Stream, System, Tap, property::{Listenable, NeedBoth, NeedElement, NeedQualifier, NoExtra, Qualifier, ReadWrite, encode_u32, encode_vec_u32}};
+use crate::{Device, Global, Process, Property, SampleRateRange, Stream, System, Tap, property::{Listenable, NeedBoth, NeedElement, NeedQualifier, NoExtra, Qualifier, ReadWrite, bytes_u32, bytes_vec_u32}};
 
 // ---- Traits ------------
 
@@ -102,13 +102,13 @@ pub trait IntoQualifierBytes {
 
 impl IntoQualifierBytes for u32 {
     fn into_bytes(self) -> Vec<u8> {
-        encode_u32(self)
+        bytes_u32(self)
     }
 }
 
 impl IntoQualifierBytes for Vec<u32> {
     fn into_bytes(self) -> Vec<u8> {
-        encode_vec_u32(self)
+        bytes_vec_u32(self)
     }
 }
 

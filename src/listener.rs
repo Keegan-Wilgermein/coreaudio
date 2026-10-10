@@ -16,7 +16,7 @@
 // ---- Imports --------
 use std::{ffi::c_void, marker::PhantomData, sync::mpsc::{self, Receiver, RecvTimeoutError, Sender}, time::Duration};
 use coreaudio_sys::{AudioObjectAddPropertyListener, AudioObjectID, AudioObjectPropertyAddress, AudioObjectRemovePropertyListener, OSStatus};
-use crate::{Property, data_types::PropertySize, errors::{CoreAudioError, ErrorKind, OSStatusCheck}, object::get_property_internal, property::{Listenable, NoExtra}};
+use crate::{Property, data_types::PropertySize, errors::{CoreAudioError, ErrorKind, OSStatusCheck}, object::get_property_internal, property::{Listenable, NoExtra, Qualifier}};
 
 // ---- Structs ------------
 
@@ -294,7 +294,8 @@ unsafe extern "C" fn io_callback<T, D, A>(
         unsafe { *address },
         client_data.size,
         client_data.read,
-        None,
+        // Never written to: the callback only reads.
+        |_| Qualifier::from_bytes(Vec::new()),
     );
 
     let data = match get_property_internal(device_id, property) {
@@ -327,7 +328,8 @@ unsafe extern "C" fn sink_callback<T, D, A>(
         unsafe { *address },
         client_data.size,
         client_data.read,
-        None,
+        // Never written to: the callback only reads.
+        |_| Qualifier::from_bytes(Vec::new()),
     );
 
     (client_data.sink)(get_property_internal(device_id, property));

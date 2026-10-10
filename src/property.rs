@@ -65,8 +65,12 @@ pub struct Property<T, Object, Access, L, E> {
     /// Deserialises the raw byte buffer returned by CoreAudio into `T`.
     pub(crate) read: fn(&[u8]) -> Result<T, CoreAudioError>,
     /// Serialises a value of type `T` into bytes for `AudioObjectSetPropertyData`.
-    /// `None` for read-only properties.
-    pub(crate) encode: Option<fn(T) -> Vec<u8>>,
+    /// The result also owns anything those bytes point to (a string's
+    /// `CFString`), so it must outlive the call.
+    ///
+    /// Every property has one, including [`ReadOnly`] ones: the access marker
+    /// gates `set_property`, but `force_set_property` can still write them.
+    pub(crate) encode: fn(T) -> Qualifier,
     /// Optional qualifier passed alongside the property address.
     pub(crate) qualifier: Option<Qualifier>,
     _object: PhantomData<Object>,
@@ -76,13 +80,13 @@ pub struct Property<T, Object, Access, L, E> {
 }
 
 impl<T, Object, Access, L, E> Property<T, Object, Access, L, E> {
-    /// Constructs a `Property` from its address, read function, and optional
+    /// Constructs a `Property` from its address, size, read function, and
     /// encode function. The qualifier starts as `None`.
     pub(crate) const fn new(
         address: AudioObjectPropertyAddress,
         size: PropertySize,
         read: fn(&[u8]) -> Result<T, CoreAudioError>,
-        encode: Option<fn(T) -> Vec<u8>>,
+        encode: fn(T) -> Qualifier,
     ) -> Self {
         Self {
             address,
@@ -276,40 +280,50 @@ fn read_vec_stream_ranged_description(bytes: &[u8]) -> Result<Vec<StreamRangedDe
 }
 
 /// Encodes an `f64` as native-endian bytes.
-fn encode_f64(value: f64) -> Vec<u8> {
+fn encode_f64(value: f64) -> Qualifier {
+    Qualifier::from_bytes(value.to_ne_bytes().to_vec())
+}
+
+/// Native-endian bytes of a `u32`.
+pub(crate) fn bytes_u32(value: u32) -> Vec<u8> {
     value.to_ne_bytes().to_vec()
 }
 
 /// Encodes a `u32` as native-endian bytes.
-pub(crate) fn encode_u32(value: u32) -> Vec<u8> {
-    value.to_ne_bytes().to_vec()
+pub(crate) fn encode_u32(value: u32) -> Qualifier {
+    Qualifier::from_bytes(bytes_u32(value))
 }
 
-/// Encodes a `Vec<u32>` as a packed array of native-endian bytes.
-pub(crate) fn encode_vec_u32(value: Vec<u32>) -> Vec<u8> {
+/// Packed native-endian bytes of a `Vec<u32>`.
+pub(crate) fn bytes_vec_u32(value: Vec<u32>) -> Vec<u8> {
     value.iter().flat_map(|n| n.to_ne_bytes()).collect()
 }
 
+/// Encodes a `Vec<u32>` as a packed array of native-endian bytes.
+pub(crate) fn encode_vec_u32(value: Vec<u32>) -> Qualifier {
+    Qualifier::from_bytes(bytes_vec_u32(value))
+}
+
 /// Encodes a `bool` as a `u32` (`0` or `1`) in native-endian bytes.
-fn encode_bool(value: bool) -> Vec<u8> {
-    encode_u32(value as u32)
+fn encode_bool(value: bool) -> Qualifier {
+    Qualifier::from_bytes(bytes_u32(value as u32))
 }
 
 /// Encodes an `AudioObjectID` (`u32`) as native-endian bytes.
-fn encode_audio_object_id(value: AudioObjectID) -> Vec<u8> {
-    encode_u32(value)
+fn encode_audio_object_id(value: AudioObjectID) -> Qualifier {
+    Qualifier::from_bytes(bytes_u32(value))
 }
 
 /// Serialises a [`StreamDescription`] into an `AudioStreamBasicDescription`
 /// and returns its raw bytes.
-fn encode_stream_description(value: StreamDescription) -> Vec<u8> {
+fn encode_stream_description(value: StreamDescription) -> Qualifier {
     let asbd: AudioStreamBasicDescription = value.into();
     let size = size_of::<AudioStreamBasicDescription>();
     let mut bytes = vec![0u8; size];
     unsafe {
         std::ptr::write(bytes.as_mut_ptr() as *mut AudioStreamBasicDescription, asbd);
     }
-    bytes
+    Qualifier::from_bytes(bytes)
 }
 
 /// Reads an `f32` from `bytes` in native byte order.
@@ -325,8 +339,8 @@ fn read_f32(bytes: &[u8]) -> Result<f32, CoreAudioError> {
 }
 
 /// Encodes an `f32` as native-endian bytes.
-fn encode_f32(value: f32) -> Vec<u8> {
-    value.to_ne_bytes().to_vec()
+fn encode_f32(value: f32) -> Qualifier {
+    Qualifier::from_bytes(value.to_ne_bytes().to_vec())
 }
 
 /// Reads two consecutive `u32` values from `bytes` and returns them as a
@@ -345,11 +359,11 @@ fn read_channel_pair(bytes: &[u8]) -> Result<ChannelPair, CoreAudioError> {
 }
 
 /// Serialises a [`ChannelPair`] as two consecutive native-endian `u32` values.
-fn encode_channel_pair(value: ChannelPair) -> Vec<u8> {
+fn encode_channel_pair(value: ChannelPair) -> Qualifier {
     let mut bytes = Vec::with_capacity(8);
     bytes.extend_from_slice(&value.left().to_ne_bytes());
     bytes.extend_from_slice(&value.right().to_ne_bytes());
-    bytes
+    Qualifier::from_bytes(bytes)
 }
 
 /// Reads an `AudioValueRange` from `bytes` and converts it to a [`DBRange`].
@@ -371,9 +385,9 @@ fn read_hog_mode(bytes: &[u8]) -> Result<HogMode, CoreAudioError> {
 }
 
 /// Serialises a [`HogMode`] as a native-endian `i32`.
-fn encode_hog_mode(value: HogMode) -> Vec<u8> {
+fn encode_hog_mode(value: HogMode) -> Qualifier {
     let num: i32 = value.into();
-    num.to_ne_bytes().to_vec()
+    Qualifier::from_bytes(num.to_ne_bytes().to_vec())
 }
 
 /// Reads a `u32` from `bytes` and converts it to a [`Scope`].
@@ -413,9 +427,9 @@ fn read_transport_type(bytes: &[u8]) -> Result<TransportType, CoreAudioError> {
 }
 
 /// Serialises a [`PowerHint`] as a native-endian `u32`.
-fn encode_power_hint(value: PowerHint) -> Vec<u8> {
+fn encode_power_hint(value: PowerHint) -> Qualifier {
     let num: u32 = value.into();
-    num.to_ne_bytes().to_vec()
+    Qualifier::from_bytes(num.to_ne_bytes().to_vec())
 }
 
 /// Reads a variable-length `AudioChannelLayout` from `bytes`.
@@ -424,8 +438,71 @@ fn read_channel_layout(bytes: &[u8]) -> Result<ChannelLayout, CoreAudioError> {
 }
 
 /// Serialises a [`ChannelLayout`] as a variable-length `AudioChannelLayout`.
-fn encode_channel_layout(value: ChannelLayout) -> Vec<u8> {
-    value.to_bytes()
+fn encode_channel_layout(value: ChannelLayout) -> Qualifier {
+    Qualifier::from_bytes(value.to_bytes())
+}
+
+/// Encodes a `String` as the `CFStringRef` CoreAudio takes.
+///
+/// The returned value owns the `CFString` the bytes point to, so it has to
+/// stay alive until `AudioObjectSetPropertyData` has returned.
+fn encode_string(value: String) -> Qualifier {
+    Qualifier::from_string(&value)
+}
+
+/// Encodes an `i32` as native-endian bytes.
+fn encode_i32(value: i32) -> Qualifier {
+    Qualifier::from_bytes(value.to_ne_bytes().to_vec())
+}
+
+/// Returns the raw bytes of an `AudioValueRange`.
+fn value_range_bytes(range: AudioValueRange) -> Vec<u8> {
+    let mut bytes = vec![0u8; size_of::<AudioValueRange>()];
+    unsafe { std::ptr::write(bytes.as_mut_ptr() as *mut AudioValueRange, range) };
+    bytes
+}
+
+/// Serialises a [`BufferFrameSizeRange`] as an `AudioValueRange`.
+fn encode_buffer_size_range(value: BufferFrameSizeRange) -> Qualifier {
+    Qualifier::from_bytes(value_range_bytes(value.into()))
+}
+
+/// Serialises a [`DBRange`] as an `AudioValueRange`.
+fn encode_db_range(value: DBRange) -> Qualifier {
+    Qualifier::from_bytes(value_range_bytes(value.into()))
+}
+
+/// Serialises a [`Scope`] as a native-endian `u32`.
+fn encode_scope(value: Scope) -> Qualifier {
+    Qualifier::from_bytes(bytes_u32(value.into()))
+}
+
+/// Serialises a [`TerminalType`] as a native-endian `u32`.
+fn encode_terminal_type(value: TerminalType) -> Qualifier {
+    Qualifier::from_bytes(bytes_u32(value.into()))
+}
+
+/// Serialises a [`TransportType`] as a native-endian `u32`.
+fn encode_transport_type(value: TransportType) -> Qualifier {
+    Qualifier::from_bytes(bytes_u32(value.into()))
+}
+
+/// Serialises a packed array of [`SampleRateRange`] as `AudioValueRange`s.
+fn encode_vec_sample_rate_range(value: Vec<SampleRateRange>) -> Qualifier {
+    Qualifier::from_bytes(value.into_iter().flat_map(|range| value_range_bytes(range.into())).collect())
+}
+
+/// Serialises a packed array of [`StreamRangedDescription`] as
+/// `AudioStreamRangedDescription`s.
+fn encode_vec_stream_ranged_description(value: Vec<StreamRangedDescription>) -> Qualifier {
+    Qualifier::from_bytes(
+        value.into_iter().flat_map(|description| {
+            let raw: AudioStreamRangedDescription = description.into();
+            let mut bytes = vec![0u8; size_of::<AudioStreamRangedDescription>()];
+            unsafe { std::ptr::write(bytes.as_mut_ptr() as *mut AudioStreamRangedDescription, raw) };
+            bytes
+        }).collect()
+    )
 }
 
 // ---- Helper ----
@@ -450,7 +527,7 @@ const fn address(
 ///
 /// Used to walk the CoreAudio class hierarchy. For example, an `AudioDevice`'s
 /// base class is `AudioObject`.
-pub const OBJECT_BASE_CLASS: Property<u32, Global, ReadOnly, Silent, NoExtra> =
+pub const OBJECT_BASE_CLASS: Property<u32, Global, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioObjectPropertyBaseClass,
@@ -458,7 +535,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    None,
+    encode_u32,
 );
 
 /// The class ID identifying what kind of object this is.
@@ -466,7 +543,7 @@ Property::new(
 /// For example, `kAudioDeviceClassID` for a device or `kAudioStreamClassID`
 /// for a stream. Use this alongside `OBJECT_BASE_CLASS` to inspect the full
 /// type hierarchy of an object.
-pub const OBJECT_CLASS: Property<u32, Global, ReadOnly, Silent, NoExtra> =
+pub const OBJECT_CLASS: Property<u32, Global, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioObjectPropertyClass,
@@ -474,14 +551,14 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    None,
+    encode_u32,
 );
 
 /// The `AudioObjectID` of the object that owns this one.
 ///
 /// For a stream, this is the device it belongs to. For a device, this is the
 /// system object. Useful for traversing the object tree upward.
-pub const OBJECT_OWNER: Property<AudioObjectID, Global, ReadOnly, Silent, NoExtra> =
+pub const OBJECT_OWNER: Property<AudioObjectID, Global, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioObjectPropertyOwner,
@@ -489,7 +566,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<AudioObjectID>() as u32),
     read_audio_object_id,
-    None,
+    encode_audio_object_id,
 );
 
 /// The model name of the hardware this object represents, as provided by the manufacturer.
@@ -504,11 +581,11 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// The name of the company that manufactured the hardware this object represents.
-pub const OBJECT_MANUFACTURER: Property<String, Global, ReadOnly, Silent, NoExtra> =
+pub const OBJECT_MANUFACTURER: Property<String, Global, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioObjectPropertyManufacturer,
@@ -516,7 +593,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// The display name of the specified element (channel) within the specified scope.
@@ -524,7 +601,7 @@ Property::new(
 /// Elements correspond to individual channels — for example, "Front Left" or
 /// "Rear Right". Element 0 (`kAudioObjectPropertyElementMain`) names the object
 /// as a whole rather than a specific channel.
-pub const OBJECT_ELEMENT_NAME: Property<String, Global, ReadOnly, Silent, NeedElement> =
+pub const OBJECT_ELEMENT_NAME: Property<String, Global, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioObjectPropertyElementName,
@@ -532,7 +609,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// The category name of the specified element, describing the type of signal it carries.
@@ -547,7 +624,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// The ordinal name of the specified element — typically its channel number as a string.
@@ -562,7 +639,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// The display name of the specified input channel on a device.
@@ -571,7 +648,7 @@ Property::new(
 /// `OBJECT_ELEMENT_NAME` often reads empty where this returns a name — e.g.
 /// "Channel 1" on an iPhone, or "Mic/Line 1" on an audio interface. Element 0
 /// names the device's input side as a whole.
-pub const DEVICE_INPUT_ELEMENT_NAME: Property<String, Device, ReadOnly, Silent, NeedElement> =
+pub const DEVICE_INPUT_ELEMENT_NAME: Property<String, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioObjectPropertyElementName,
@@ -579,13 +656,13 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// The display name of the specified output channel on a device.
 ///
 /// The output-side counterpart of `DEVICE_INPUT_ELEMENT_NAME`.
-pub const DEVICE_OUTPUT_ELEMENT_NAME: Property<String, Device, ReadOnly, Silent, NeedElement> =
+pub const DEVICE_OUTPUT_ELEMENT_NAME: Property<String, Device, ReadWrite, Listenable, NeedElement> =
 Property::new(
     address(
         kAudioObjectPropertyElementName,
@@ -593,7 +670,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// The `AudioObjectID`s of all objects directly owned by this object, filtered by class.
@@ -601,7 +678,7 @@ Property::new(
 /// The qualifier is a list of `AudioClassID` values (`u32`). Only objects whose
 /// class matches one of the provided IDs are returned. Pass an empty list to
 /// return all owned objects regardless of class.
-pub const OBJECT_OWNED_OBJECTS: Property<Vec<AudioObjectID>, Global, ReadOnly, Silent, NeedQualifier<Vec<u32>>> =
+pub const OBJECT_OWNED_OBJECTS: Property<Vec<AudioObjectID>, Global, ReadOnly, Listenable, NeedQualifier<Vec<u32>>> =
 Property::new(
     address(
         kAudioObjectPropertyOwnedObjects,
@@ -609,7 +686,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 /// The bundle ID of the HAL plug-in that created this object.
@@ -617,7 +694,7 @@ Property::new(
 /// For Apple built-in hardware this is the Apple HAL plug-in; for third-party
 /// devices it identifies the driver. Useful for associating an object with its
 /// vendor's software.
-pub const OBJECT_CREATOR: Property<String, Global, ReadOnly, Silent, NoExtra> =
+pub const OBJECT_CREATOR: Property<String, Global, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioObjectPropertyCreator,
@@ -625,7 +702,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 // ---- Device constants ----
@@ -642,7 +719,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// A persistent string that uniquely identifies this specific hardware unit.
@@ -651,7 +728,7 @@ Property::new(
 /// reconnects, this UID is stable and suitable for storing in preferences to
 /// refer to a specific device later. It is unique per physical unit, unlike
 /// `DEVICE_MODEL_UID` which is the same for all devices of the same model.
-pub const DEVICE_UID: Property<String, Device, ReadOnly, Silent, NoExtra> =
+pub const DEVICE_UID: Property<String, Device, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioDevicePropertyDeviceUID,
@@ -659,7 +736,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// Whether the device is still physically present and operational.
@@ -674,7 +751,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    None,
+    encode_bool,
 );
 
 /// Whether the device currently has any active I/O clients.
@@ -690,7 +767,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    None,
+    encode_bool,
 );
 
 /// The sample rate the device is currently running at, in Hz.
@@ -706,7 +783,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<f64>() as u32),
     read_f64,
-    Some(encode_f64),
+    encode_f64,
 );
 
 /// The set of sample rates — or continuous ranges — that the device hardware supports.
@@ -722,7 +799,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_sample_rate_range,
-    None,
+    encode_vec_sample_rate_range,
 );
 
 /// The number of frames in each I/O cycle.
@@ -739,14 +816,14 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    Some(encode_u32)
+    encode_u32,
 );
 
 /// The minimum and maximum buffer frame sizes this device supports.
 ///
 /// Use this to clamp or validate a requested buffer size before writing
 /// `DEVICE_BUFFER_FRAME_SIZE`.
-pub const DEVICE_BUFFER_FRAME_SIZE_RANGE: Property<BufferFrameSizeRange, Device, ReadOnly, Silent, NoExtra> =
+pub const DEVICE_BUFFER_FRAME_SIZE_RANGE: Property<BufferFrameSizeRange, Device, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioDevicePropertyBufferFrameSizeRange,
@@ -754,14 +831,14 @@ Property::new(
     ),
     PropertySize::Known(size_of::<AudioValueRange>() as u32),
     read_buffer_size_range,
-    None,
+    encode_buffer_size_range,
 );
 
 /// Frames of latency added by the device hardware on the input path.
 ///
 /// Does not include the I/O buffer size. Add this to `STREAM_LATENCY` and the
 /// buffer size when computing total input latency.
-pub const DEVICE_INPUT_LATENCY: Property<u32, Device, ReadOnly, Silent, NoExtra> =
+pub const DEVICE_INPUT_LATENCY: Property<u32, Device, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioDevicePropertyLatency,
@@ -769,14 +846,14 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    None,
+    encode_u32,
 );
 
 /// Frames of latency added by the device hardware on the output path.
 ///
 /// Does not include the I/O buffer size. Add this to `STREAM_LATENCY` and the
 /// buffer size when computing total output latency.
-pub const DEVICE_OUTPUT_LATENCY: Property<u32, Device, ReadOnly, Silent, NoExtra> =
+pub const DEVICE_OUTPUT_LATENCY: Property<u32, Device, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioDevicePropertyLatency,
@@ -784,7 +861,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    None
+    encode_u32,
 );
 
 /// The `AudioObjectID`s of all input streams on this device.
@@ -799,7 +876,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 /// The `AudioObjectID`s of all output streams on this device.
@@ -814,7 +891,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 /// The PID of the process that currently holds exclusive access to this device, or `-1` if none.
@@ -830,7 +907,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<i32>() as u32),
     read_hog_mode,
-    Some(encode_hog_mode)
+    encode_hog_mode,
 );
 
 // ---- Device core constants (AudioHardwareBase.h) ----
@@ -841,7 +918,7 @@ Property::new(
 /// should be launched when the user requests device settings. Distinct from
 /// `DEVICE_HOG_MODE` — this identifies the configuration app, not the
 /// exclusive-access holder.
-pub const DEVICE_CONFIGURATION_APPLICATION: Property<String, Device, ReadOnly, Silent, NoExtra> =
+pub const DEVICE_CONFIGURATION_APPLICATION: Property<String, Device, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioDevicePropertyConfigurationApplication,
@@ -849,7 +926,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// A persistent identifier shared by all hardware units of the same model.
@@ -857,7 +934,7 @@ Property::new(
 /// Where `DEVICE_UID` is unique per physical unit, this is the same for every
 /// device of the same type. Useful for applying model-specific settings
 /// without targeting a particular unit.
-pub const DEVICE_MODEL_UID: Property<String, Device, ReadOnly, Silent, NoExtra> =
+pub const DEVICE_MODEL_UID: Property<String, Device, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioDevicePropertyModelUID,
@@ -865,7 +942,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// A four-character code describing how the device connects to the system.
@@ -873,7 +950,7 @@ Property::new(
 /// Matches one of the `kAudioDeviceTransportType*` constants — e.g. USB,
 /// FireWire, Bluetooth, PCI, or Built-In. Useful for filtering devices by
 /// connection type or adjusting latency expectations.
-pub const DEVICE_TRANSPORT_TYPE: Property<TransportType, Device, ReadOnly, Silent, NoExtra> =
+pub const DEVICE_TRANSPORT_TYPE: Property<TransportType, Device, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioDevicePropertyTransportType,
@@ -881,7 +958,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_transport_type,
-    None,
+    encode_transport_type,
 );
 
 /// `AudioObjectID`s of other devices sharing the same underlying transport or clock.
@@ -889,7 +966,7 @@ Property::new(
 /// For example, the separate input and output sides of a USB interface that
 /// appear as two logical devices will list each other here. Useful for
 /// coordinating clock settings across related devices.
-pub const DEVICE_RELATED_DEVICES: Property<Vec<AudioObjectID>, Device, ReadOnly, Silent, NoExtra> =
+pub const DEVICE_RELATED_DEVICES: Property<Vec<AudioObjectID>, Device, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioDevicePropertyRelatedDevices,
@@ -897,7 +974,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 /// An opaque integer grouping devices that share the same hardware clock.
@@ -905,7 +982,7 @@ Property::new(
 /// Two devices with the same non-zero value are phase-locked to each other
 /// and can be used together without sample-rate conversion. A value of `0`
 /// means the device is not part of any shared clock domain.
-pub const DEVICE_CLOCK_DOMAIN: Property<u32, Device, ReadOnly, Silent, NoExtra> =
+pub const DEVICE_CLOCK_DOMAIN: Property<u32, Device, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioDevicePropertyClockDomain,
@@ -913,7 +990,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    None,
+    encode_u32,
 );
 
 /// Whether this device is eligible to be selected as the system default device.
@@ -928,7 +1005,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    None,
+    encode_bool,
 );
 
 /// Whether this device can be selected as the system sound output device.
@@ -944,7 +1021,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    None,
+    encode_bool,
 );
 
 /// Extra frames the hardware adds as a safety margin to prevent glitches.
@@ -960,14 +1037,14 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    None,
+    encode_u32,
 );
 
 /// Whether this device is intentionally hidden from user-facing device lists.
 ///
 /// Hidden devices are still fully functional but should not be presented to
 /// the user in UI. Typically set on virtual or internal routing devices.
-pub const DEVICE_IS_HIDDEN: Property<bool, Device, ReadOnly, Silent, NoExtra> =
+pub const DEVICE_IS_HIDDEN: Property<bool, Device, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioDevicePropertyIsHidden,
@@ -975,7 +1052,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    None,
+    encode_bool,
 );
 
 /// The pair of channel indices the device prefers to use for stereo output or input.
@@ -991,7 +1068,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<[u32; 2]>() as u32),
     read_channel_pair,
-    Some(encode_channel_pair),
+    encode_channel_pair,
 );
 
 /// The speaker each output channel feeds, as set in Audio MIDI Setup's
@@ -1008,7 +1085,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_channel_layout,
-    Some(encode_channel_layout),
+    encode_channel_layout,
 );
 
 /// The speaker each input channel comes from.
@@ -1022,7 +1099,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_channel_layout,
-    Some(encode_channel_layout),
+    encode_channel_layout,
 );
 
 // ---- Device convenience constants (AudioHardware.h) ----
@@ -1040,7 +1117,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    None,
+    encode_u32,
 );
 
 /// Notification property that fires when the device's I/O cycle stops unexpectedly.
@@ -1056,7 +1133,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    None,
+    encode_u32,
 );
 
 /// The fraction of each I/O cycle, from `0.0` to `1.0`, the HAL may use for scheduling.
@@ -1064,7 +1141,7 @@ Property::new(
 /// Values below `1.0` leave headroom for other real-time work on the same
 /// thread. Reduce this if your audio callback shares a thread with other
 /// time-critical tasks.
-pub const DEVICE_IO_CYCLE_USAGE: Property<f32, Device, ReadWrite, Silent, NoExtra> =
+pub const DEVICE_IO_CYCLE_USAGE: Property<f32, Device, ReadWrite, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioDevicePropertyIOCycleUsage,
@@ -1072,7 +1149,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
-    Some(encode_f32),
+    encode_f32,
 );
 
 /// Non-zero if the device delivers I/O cycles with varying frame counts.
@@ -1088,7 +1165,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    None,
+    encode_u32,
 );
 
 /// The volume of the specified channel as a linear scalar (`0.0` = silence, `1.0` = full scale).
@@ -1104,7 +1181,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
-    Some(encode_f32),
+    encode_f32,
 );
 
 /// The volume of the specified channel as a linear scalar (`0.0` = silence, `1.0` = full scale).
@@ -1121,7 +1198,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
-    Some(encode_f32),
+    encode_f32,
 );
 
 /// The volume of the specified channel as a linear scalar (`0.0` = silence, `1.0` = full scale).
@@ -1138,7 +1215,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
-    Some(encode_f32),
+    encode_f32,
 );
 
 /// The volume of the specified channel in dBFS (`0.0` = full scale, negative = attenuation).
@@ -1154,7 +1231,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
-    Some(encode_f32),
+    encode_f32,
 );
 
 /// The minimum and maximum volume values in dB that the specified channel supports.
@@ -1169,7 +1246,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<AudioValueRange>() as u32),
     read_db_range,
-    None,
+    encode_db_range,
 );
 
 /// Translates a linear scalar volume to its dB equivalent for the specified channel.
@@ -1185,7 +1262,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
-    None,
+    encode_f32,
 );
 
 /// Translates a dB volume to its linear scalar equivalent for the specified channel.
@@ -1201,7 +1278,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
-    None,
+    encode_f32,
 );
 
 /// The stereo pan position of the specified channel (`0.0` = full left, `1.0` = full right).
@@ -1216,7 +1293,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
-    Some(encode_f32),
+    encode_f32,
 );
 
 /// The pair of channel indices between which `DEVICE_STEREO_PAN` applies.
@@ -1231,7 +1308,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<[u32; 2]>() as u32),
     read_channel_pair,
-    None,
+    encode_channel_pair,
 );
 
 /// Whether the specified channel is muted.
@@ -1246,7 +1323,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    Some(encode_bool),
+    encode_bool,
 );
 
 /// Whether the specified channel is muted.
@@ -1261,7 +1338,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    Some(encode_bool),
+    encode_bool,
 );
 
 /// Whether the specified channel is muted.
@@ -1276,7 +1353,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    Some(encode_bool),
+    encode_bool,
 );
 
 /// Whether the specified channel is soloed.
@@ -1291,7 +1368,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    Some(encode_bool),
+    encode_bool,
 );
 
 /// Whether phantom power (+48V) is enabled on the specified input channel.
@@ -1307,7 +1384,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    Some(encode_bool),
+    encode_bool,
 );
 
 /// Whether the polarity of the signal on the specified channel is inverted (180° phase flip).
@@ -1322,7 +1399,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    Some(encode_bool),
+    encode_bool,
 );
 
 /// Whether the clip indicator for the specified channel is lit.
@@ -1338,7 +1415,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    Some(encode_bool),
+    encode_bool,
 );
 
 /// Whether the talkback path is active on the specified channel.
@@ -1354,7 +1431,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    Some(encode_bool),
+    encode_bool,
 );
 
 /// Whether the listenback path is active on the specified channel.
@@ -1370,7 +1447,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    Some(encode_bool),
+    encode_bool,
 );
 
 /// Whether a physical cable is detected in the jack for the specified channel.
@@ -1385,7 +1462,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    None,
+    encode_bool,
 );
 
 /// The ID of the currently active input or output data source on the specified channel.
@@ -1402,7 +1479,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    Some(encode_u32),
+    encode_u32,
 );
 
 /// All data source IDs available on the specified channel.
@@ -1417,7 +1494,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 /// The display name of a data source, looked up by its ID.
@@ -1433,7 +1510,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// The ID of the clock source the device is currently synchronised to.
@@ -1449,14 +1526,14 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    Some(encode_u32),
+    encode_u32,
 );
 
 /// All clock source IDs available on this device.
 ///
 /// Use `DEVICE_CLOCK_SOURCE_NAME` to get a display label for each ID, and
 /// write one of these IDs to `DEVICE_CLOCK_SOURCE` to switch the active clock.
-pub const DEVICE_CLOCK_SOURCES: Property<Vec<AudioObjectID>, Device, ReadOnly, Silent, NoExtra> =
+pub const DEVICE_CLOCK_SOURCES: Property<Vec<AudioObjectID>, Device, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioDevicePropertyClockSources,
@@ -1464,7 +1541,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 /// The display name of a clock source, looked up by its ID.
@@ -1479,7 +1556,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// The ID of the currently active play-through destination.
@@ -1495,7 +1572,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    Some(encode_u32),
+    encode_u32,
 );
 
 /// All play-through destination IDs available on this device.
@@ -1511,7 +1588,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 /// The display name of a play-through destination, looked up by its ID.
@@ -1526,7 +1603,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// The ID of the nominal line level selected for the specified channel.
@@ -1542,7 +1619,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    Some(encode_u32),
+    encode_u32,
 );
 
 /// All nominal line level IDs available on the specified channel.
@@ -1558,7 +1635,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 /// The display name of a nominal line level, looked up by its ID.
@@ -1573,7 +1650,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// The ID of the high-pass filter setting currently active on the specified channel.
@@ -1589,7 +1666,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    Some(encode_u32),
+    encode_u32,
 );
 
 /// All high-pass filter setting IDs available on the specified channel.
@@ -1605,7 +1682,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 /// The display name of a high-pass filter setting, looked up by its ID.
@@ -1620,7 +1697,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// The LFE (subwoofer) channel volume as a linear scalar (`0.0` = silence, `1.0` = full scale).
@@ -1635,7 +1712,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
-    Some(encode_f32),
+    encode_f32,
 );
 
 /// The LFE (subwoofer) channel volume in dBFS.
@@ -1650,7 +1727,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
-    Some(encode_f32),
+    encode_f32,
 );
 
 /// The minimum and maximum LFE channel volume values in dB that the device supports.
@@ -1662,7 +1739,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<AudioValueRange>() as u32),
     read_db_range,
-    None,
+    encode_db_range,
 );
 
 /// Translates a linear scalar LFE volume to its dB equivalent for the specified channel.
@@ -1677,7 +1754,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
-    None,
+    encode_f32,
 );
 
 /// Translates a dB LFE volume to its linear scalar equivalent for the specified channel.
@@ -1692,7 +1769,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<f32>() as u32),
     read_f32,
-    None,
+    encode_f32,
 );
 
 /// Whether the LFE (subwoofer) channel is muted.
@@ -1707,7 +1784,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    Some(encode_bool),
+    encode_bool,
 );
 
 /// The default stream of a device
@@ -1719,7 +1796,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<AudioStreamBasicDescription>() as u32),
     read_stream_description,
-    None,
+    encode_stream_description,
 );
 
 // ---- Stream constants ----
@@ -1736,7 +1813,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// Whether this stream is currently active and processing audio.
@@ -1744,7 +1821,7 @@ Property::new(
 /// A stream can exist but be inactive — for example when the device is idle or
 /// when the stream has been deactivated by the driver. Listen to track changes
 /// in stream activity.
-pub const STREAM_IS_ACTIVE: Property<bool, Stream, ReadOnly, Listenable, NoExtra> =
+pub const STREAM_IS_ACTIVE: Property<bool, Stream, ReadWrite, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioStreamPropertyIsActive,
@@ -1752,7 +1829,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    None,
+    encode_bool,
 );
 
 /// The direction of this stream: `0` for output, `1` for input.
@@ -1760,7 +1837,7 @@ Property::new(
 /// Fixed at stream creation — a stream cannot change direction at runtime.
 /// Use this to determine whether the stream carries data to or from the
 /// hardware without having to track which device scope it came from.
-pub const STREAM_DIRECTION: Property<Scope, Stream, ReadOnly, Silent, NoExtra> =
+pub const STREAM_DIRECTION: Property<Scope, Stream, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioStreamPropertyDirection,
@@ -1768,7 +1845,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_scope,
-    None,
+    encode_scope,
 );
 
 /// The audio format this stream presents to the client application.
@@ -1785,7 +1862,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<AudioStreamBasicDescription>() as u32),
     read_stream_description,
-    Some(encode_stream_description)
+    encode_stream_description,
 );
 
 /// The audio format the hardware actually uses on this stream.
@@ -1802,7 +1879,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<AudioStreamBasicDescription>() as u32),
     read_stream_description,
-    Some(encode_stream_description)
+    encode_stream_description,
 );
 
 /// A code describing the physical endpoint this stream connects to.
@@ -1811,7 +1888,7 @@ Property::new(
 /// `kAudioStreamTerminalTypeMicrophone`, `kAudioStreamTerminalTypeHeadphones`,
 /// or `kAudioStreamTerminalTypeSpeaker`. Useful for choosing an appropriate
 /// icon or routing hint in UI.
-pub const TERMINAL_TYPE: Property<TerminalType, Stream, ReadOnly, Silent, NoExtra> =
+pub const TERMINAL_TYPE: Property<TerminalType, Stream, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioStreamPropertyTerminalType,
@@ -1819,7 +1896,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_terminal_type,
-    None,
+    encode_terminal_type,
 );
 
 /// The one-based device channel number that corresponds to element 1 of this stream.
@@ -1827,7 +1904,7 @@ Property::new(
 /// Used to map stream-relative channel positions to absolute device channel
 /// numbers. For example, if a stream starts at channel 3, its element 1 is
 /// device channel 3, element 2 is device channel 4, and so on.
-pub const STARTING_CHANNEL: Property<u32, Stream, ReadOnly, Silent, NoExtra> =
+pub const STARTING_CHANNEL: Property<u32, Stream, ReadOnly, Listenable, NoExtra> =
 Property::new(
     address(
         kAudioStreamPropertyStartingChannel,
@@ -1835,7 +1912,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    None,
+    encode_u32,
 );
 
 /// All virtual formats this stream can present to clients, each paired with a sample rate range.
@@ -1851,7 +1928,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_stream_ranged_description,
-    None,
+    encode_vec_stream_ranged_description,
 );
 
 /// All physical formats the hardware natively supports, each paired with a sample rate range.
@@ -1867,7 +1944,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_stream_ranged_description,
-    None,
+    encode_vec_stream_ranged_description,
 );
 
 /// Frames of latency introduced by this stream, in addition to the device latency.
@@ -1883,7 +1960,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    None,
+    encode_u32,
 );
 
 // ---- System constants ----
@@ -1897,7 +1974,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// The `AudioObjectID`s of all audio devices currently known to the HAL.
@@ -1913,7 +1990,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 /// The `AudioObjectID` of the device currently selected as the system default input.
@@ -1929,7 +2006,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_audio_object_id,
-    Some(encode_audio_object_id)
+    encode_audio_object_id,
 );
 
 /// The `AudioObjectID` of the device currently selected as the system default output.
@@ -1944,7 +2021,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<AudioObjectID>() as u32),
     read_audio_object_id,
-    Some(encode_audio_object_id)
+    encode_audio_object_id,
 );
 
 /// The `AudioObjectID`s of all audio box objects known to the HAL.
@@ -1959,7 +2036,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 /// The `AudioObjectID`s of all standalone clock devices known to the HAL.
@@ -1974,7 +2051,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 /// Whether the HAL daemon is currently starting up or shutting down.
@@ -1990,7 +2067,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    None,
+    encode_bool,
 );
 
 /// Whether the HAL will allow the system to sleep while audio I/O is active.
@@ -2006,7 +2083,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    Some(encode_bool)
+    encode_bool,
 );
 
 /// The `AudioObjectID`s of all HAL plug-ins currently loaded.
@@ -2022,7 +2099,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 /// A hint to the HAL about the system's current power mode.
@@ -2038,7 +2115,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_power_hint,
-    Some(encode_power_hint)
+    encode_power_hint,
 );
 
 /// The `AudioObjectID`s of all audio tap objects currently known to the HAL.
@@ -2054,7 +2131,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 /// The `AudioObjectID` of the device used for system alert and UI sounds.
@@ -2070,7 +2147,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_audio_object_id,
-    Some(encode_audio_object_id),
+    encode_audio_object_id,
 );
 
 /// Translates a device UID string to the `AudioObjectID` of the matching device.
@@ -2086,7 +2163,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<AudioObjectID>() as u32),
     read_audio_object_id,
-    None,
+    encode_audio_object_id,
 );
 
 /// Translates a box UID string to the `AudioObjectID` of the matching box.
@@ -2101,7 +2178,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<AudioObjectID>() as u32),
     read_audio_object_id,
-    None,
+    encode_audio_object_id,
 );
 
 /// Translates a clock device UID string to the `AudioObjectID` of the matching clock device.
@@ -2116,7 +2193,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<AudioObjectID>() as u32),
     read_audio_object_id,
-    None,
+    encode_audio_object_id,
 );
 
 /// Translates a HAL plug-in bundle ID to the `AudioObjectID` of the loaded plug-in.
@@ -2131,7 +2208,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<AudioObjectID>() as u32),
     read_audio_object_id,
-    None,
+    encode_audio_object_id,
 );
 
 /// Translates a transport manager bundle ID to the `AudioObjectID` of the matching manager.
@@ -2146,7 +2223,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<AudioObjectID>() as u32),
     read_audio_object_id,
-    None,
+    encode_audio_object_id,
 );
 
 /// The `AudioObjectID`s of all transport manager objects known to the HAL.
@@ -2162,7 +2239,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 /// Whether the HAL is currently downmixing stereo output to mono.
@@ -2178,7 +2255,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    Some(encode_bool),
+    encode_bool,
 );
 
 /// Whether this process has elevated privileges over the HAL.
@@ -2194,7 +2271,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    None,
+    encode_bool,
 );
 
 /// Write-only property that broadcasts a user-identity-changed notification system-wide.
@@ -2211,7 +2288,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    Some(encode_u32),
+    encode_u32,
 );
 
 /// Whether audio from this process is currently audible at the system level.
@@ -2228,7 +2305,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    Some(encode_bool),
+    encode_bool,
 );
 
 /// Whether the HAL daemon may unload itself when the last client disconnects.
@@ -2244,7 +2321,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    Some(encode_bool),
+    encode_bool,
 );
 
 /// Whether any process is allowed to take exclusive (hog mode) access to a device.
@@ -2260,7 +2337,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    Some(encode_bool),
+    encode_bool,
 );
 
 /// Whether this process's user session is currently active, or the system is headless.
@@ -2277,7 +2354,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    None,
+    encode_bool,
 );
 
 /// Notification property that fires whenever the HAL daemon restarts.
@@ -2293,7 +2370,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_u32,
-    None,
+    encode_u32,
 );
 
 // ---- Process constants ----
@@ -2313,7 +2390,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 /// The PID of the process.
@@ -2325,7 +2402,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<i32>() as u32),
     read_i32,
-    None,
+    encode_i32,
 );
 
 /// The bundle ID of the process.
@@ -2339,7 +2416,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// Whether the process is running audio input or output on any device.
@@ -2351,7 +2428,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    None,
+    encode_bool,
 );
 
 /// Whether the process is running audio input on any device.
@@ -2363,7 +2440,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    None,
+    encode_bool,
 );
 
 /// Whether the process is running audio output on any device.
@@ -2375,7 +2452,7 @@ Property::new(
     ),
     PropertySize::Known(size_of::<u32>() as u32),
     read_bool,
-    None,
+    encode_bool,
 );
 
 /// The `AudioObjectID`s of the devices the process is playing to.
@@ -2387,7 +2464,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 /// The `AudioObjectID`s of the devices the process is recording from.
@@ -2399,7 +2476,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_vec_audio_object_id,
-    None,
+    encode_vec_u32,
 );
 
 // ---- Tap constants ----
@@ -2413,7 +2490,7 @@ Property::new(
     ),
     PropertySize::Unknown,
     read_string,
-    None,
+    encode_string,
 );
 
 /// The format of the audio the tap delivers.
@@ -2425,5 +2502,5 @@ Property::new(
     ),
     PropertySize::Known(size_of::<AudioStreamBasicDescription>() as u32),
     read_stream_description,
-    None,
+    encode_stream_description,
 );

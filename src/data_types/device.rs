@@ -214,3 +214,50 @@ impl From<u32> for TerminalType {
         }
     }
 }
+
+#[allow(non_upper_case_globals)]
+impl From<TransportType> for u32 {
+    fn from(value: TransportType) -> Self {
+        match value {
+            TransportType::BuiltIn => kAudioDeviceTransportTypeBuiltIn,
+            TransportType::Aggregate => kAudioDeviceTransportTypeAggregate,
+            TransportType::AutoAggregate => kAudioDeviceTransportTypeAutoAggregate,
+            TransportType::Virtual => kAudioDeviceTransportTypeVirtual,
+            TransportType::PCIe => kAudioDeviceTransportTypePCI,
+            TransportType::USB => kAudioDeviceTransportTypeUSB,
+            TransportType::FireWire => kAudioDeviceTransportTypeFireWire,
+            TransportType::Bluetooth => kAudioDeviceTransportTypeBluetooth,
+            TransportType::BluetoothLE => kAudioDeviceTransportTypeBluetoothLE,
+            TransportType::HDMI => kAudioDeviceTransportTypeHDMI,
+            TransportType::DisplayPort => kAudioDeviceTransportTypeDisplayPort,
+            TransportType::AirPlay => kAudioDeviceTransportTypeAirPlay,
+            TransportType::AVB => kAudioDeviceTransportTypeAVB,
+            TransportType::Thunderbolt => kAudioDeviceTransportTypeThunderbolt,
+            TransportType::ContinuityCapture => kAudioDeviceTransportTypeContinuityCapture,
+            TransportType::ContinuityCaptureWired => kAudioDeviceTransportTypeContinuityCaptureWired,
+            TransportType::ContinuityCaptureWireless => kAudioDeviceTransportTypeContinuityCaptureWireless,
+            TransportType::Unknown(id) => id,
+        }
+    }
+}
+
+#[allow(non_upper_case_globals)]
+impl From<TerminalType> for u32 {
+    fn from(value: TerminalType) -> Self {
+        match value {
+            TerminalType::Line => kAudioStreamTerminalTypeLine,
+            TerminalType::DigitalAudioInterface => kAudioStreamTerminalTypeDigitalAudioInterface,
+            TerminalType::Speaker => kAudioStreamTerminalTypeSpeaker,
+            TerminalType::Headphones => kAudioStreamTerminalTypeHeadphones,
+            TerminalType::LFESpeaker => kAudioStreamTerminalTypeLFESpeaker,
+            TerminalType::ReceiverSpeaker => kAudioStreamTerminalTypeReceiverSpeaker,
+            TerminalType::Microphone => kAudioStreamTerminalTypeMicrophone,
+            TerminalType::HeadsetMicrophone => kAudioStreamTerminalTypeHeadsetMicrophone,
+            TerminalType::ReceiverMicrophone => kAudioStreamTerminalTypeReceiverMicrophone,
+            TerminalType::TTY => kAudioStreamTerminalTypeTTY,
+            TerminalType::HDMI => kAudioStreamTerminalTypeHDMI,
+            TerminalType::DisplayPort => kAudioStreamTerminalTypeDisplayPort,
+            TerminalType::Unknown(id) => id,
+        }
+    }
+}

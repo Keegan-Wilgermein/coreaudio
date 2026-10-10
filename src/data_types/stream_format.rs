@@ -538,6 +538,15 @@ impl From<AudioStreamRangedDescription> for StreamRangedDescription {
     }
 }
 
+impl From<StreamRangedDescription> for AudioStreamRangedDescription {
+    fn from(value: StreamRangedDescription) -> Self {
+        Self {
+            mFormat: value.stream_description.into(),
+            mSampleRateRange: value.sample_rate_range.into(),
+        }
+    }
+}
+
 impl StreamRangedDescription {
     /// The audio format description.
     pub fn stream_description(&self) -> StreamDescription {
