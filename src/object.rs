@@ -9,9 +9,9 @@
 #![allow(unsafe_code)]
 
 // ---- Imports ------------
-use crate::{data_types::{PropertySize, Scope}, errors::{CoreAudioError, OSStatusCheck}, io_proc::{AudioBuffer, IOProc}, listener::{CallbackListener, PropertyListener}, property::{DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Property, SYSTEM_DEFAULT_INPUT, SYSTEM_DEFAULT_OUTPUT, SYSTEM_DEVICES, SYSTEM_PROCESS_OBJECT_LIST}, traits::{CanListen, HasAllData, ObjectCompatibleWith, Writeable}};
-use std::{ffi::c_void, marker::PhantomData, ptr::null};
-use coreaudio_sys::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectSetPropertyData, kAudioObjectSystemObject};
+use crate::{data_types::{PropertySize, Scope}, errors::{CoreAudioError, OSStatusCheck}, io_proc::{AudioBuffer, IOProc}, listener::{CallbackListener, PropertyListener}, property::{DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Property, SYSTEM_DEFAULT_INPUT, SYSTEM_DEFAULT_OUTPUT, SYSTEM_DEVICES, SYSTEM_PROCESS_OBJECT_LIST}, traits::{CanListen, HasAllData, IntoNonNull, PtrIntoNonNull, ObjectCompatibleWith, Writeable}};
+use std::{ffi::c_void, marker::PhantomData, ptr::{null}};
+use objc2_core_audio::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectSetPropertyData, kAudioObjectSystemObject};
 
 // ---- Structs ------------
 
@@ -74,7 +74,7 @@ impl Default for AudioObject<System> {
     /// Returns the singleton system object (`kAudioObjectSystemObject`).
     fn default() -> Self {
         Self {
-            id: kAudioObjectSystemObject,
+            id: kAudioObjectSystemObject as u32,
             _marker: PhantomData,
         }
     }
@@ -188,9 +188,9 @@ impl<C> AudioObject<C> {
         PropertyListener::try_new(self.id, property.size, property.address, property.read)
     }
 
-     /// Registers a listener for a property scoped to `C` compatible AudioObjects
-     /// 
-     /// Unlike a normal listener, it calls `sink` on each change
+    /// Registers a listener for a property scoped to `C` compatible AudioObjects
+    /// 
+    /// Unlike a normal listener, it calls `sink` on each change
     ///
     /// `sink` runs on CoreAudio's notification thread with the new value, or
     /// the error reading it. The same property rules apply as for
@@ -413,7 +413,7 @@ impl AudioObject<Tap> {}
 /// deserialises the result using `property.read`.
 pub(crate) fn get_property_internal<V, D, A, L, E>(
     id: AudioObjectID,
-    property: Property<V, D, A, L, E>,
+    mut property: Property<V, D, A, L, E>,
  ) -> Result<V, CoreAudioError> {
     let (q_len, q_data) = get_q_data_len(&property);
     let mut size = get_property_data_size_internal(id, &property)?;
@@ -422,11 +422,11 @@ pub(crate) fn get_property_internal<V, D, A, L, E>(
         let mut buffer = vec![0u8; size as usize];
         AudioObjectGetPropertyData(
             id,
-            &property.address,
+            property.address.non_null(),
             q_len,
             q_data,
-            &mut size,
-            buffer.as_mut_ptr() as *mut c_void,
+            size.non_null(),
+            buffer.as_mut_ptr().cast::<c_void>().non_null(),
         ).check()?;
 
         (property.read)(&buffer)
@@ -440,7 +440,7 @@ pub(crate) fn get_property_internal<V, D, A, L, E>(
 /// decides whether the write is allowed.
 pub(crate) fn set_property_internal<V, D, A, L, E>(
     id: AudioObjectID,
-    property: Property<V, D, A, L, E>,
+    mut property: Property<V, D, A, L, E>,
     value: V,
 ) -> Result<(), CoreAudioError> {
     unsafe {
@@ -451,11 +451,11 @@ pub(crate) fn set_property_internal<V, D, A, L, E>(
         let size = out_data.bytes.len() as u32;
         AudioObjectSetPropertyData(
             id,
-            &property.address,
+            property.address.non_null(),
             q_len,
             q_data,
             size,
-            out_data.bytes.as_ptr() as *const c_void,
+            (out_data.bytes.as_ptr() as *const c_void).non_null(),
         ).check()?;
 
         Ok(())
@@ -488,13 +488,14 @@ fn get_property_data_size_internal<V, D, A, L, E>(
         PropertySize::Known(size) => Ok(size),
         PropertySize::Unknown => {
             unsafe {
+                let mut address = property.address;
                 let mut size = 0u32;
                 AudioObjectGetPropertyDataSize(
                     id,
-                    &property.address,
+                    address.non_null(),
                     q_len,
                     q_data,
-                    &mut size,
+                    size.non_null(),
                 ).check()?;
 
                 Ok(size)

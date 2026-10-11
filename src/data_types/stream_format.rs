@@ -1,34 +1,7 @@
 //! Stream formats: sample encodings, format IDs/flags and stream descriptions.
 
-use coreaudio_sys::{
-    AudioStreamBasicDescription,
-    AudioStreamRangedDescription,
-    kAudioFormatAC3,
-    kAudioFormatAES3,
-    kAudioFormatALaw,
-    kAudioFormatAMR,
-    kAudioFormatAMR_WB,
-    kAudioFormatAPAC,
-    kAudioFormatAppleLossless,
-    kAudioFormatEnhancedAC3,
-    kAudioFormatFlagIsBigEndian,
-    kAudioFormatFlagIsFloat,
-    kAudioFormatFlagIsNonInterleaved,
-    kAudioFormatFlagIsNonMixable,
-    kAudioFormatFlagIsPacked,
-    kAudioFormatFlagIsSignedInteger,
-    kAudioFormatLinearPCM,
-    kAudioFormatMPEG4AAC,
-    kAudioFormatMPEG4AAC_ELD,
-    kAudioFormatMPEG4AAC_ELD_SBR,
-    kAudioFormatMPEG4AAC_ELD_V2,
-    kAudioFormatMPEG4AAC_HE,
-    kAudioFormatMPEG4AAC_HE_V2,
-    kAudioFormatMPEG4AAC_LD,
-    kAudioFormatMPEG4AAC_Spatial,
-    kAudioFormatMPEGLayer3,
-    kAudioFormatOpus,
-};
+use objc2_core_audio_types::{AudioStreamBasicDescription, kAudioFormatAC3, kAudioFormatAES3, kAudioFormatALaw, kAudioFormatAMR, kAudioFormatAMR_WB, kAudioFormatAPAC, kAudioFormatAppleLossless, kAudioFormatEnhancedAC3, kAudioFormatFlagIsBigEndian, kAudioFormatFlagIsFloat, kAudioFormatFlagIsNonInterleaved, kAudioFormatFlagIsNonMixable, kAudioFormatFlagIsPacked, kAudioFormatFlagIsSignedInteger, kAudioFormatLinearPCM, kAudioFormatMPEG4AAC, kAudioFormatMPEG4AAC_ELD, kAudioFormatMPEG4AAC_ELD_SBR, kAudioFormatMPEG4AAC_ELD_V2, kAudioFormatMPEG4AAC_HE, kAudioFormatMPEG4AAC_HE_V2, kAudioFormatMPEG4AAC_LD, kAudioFormatMPEG4AAC_Spatial, kAudioFormatMPEGLayer3, kAudioFormatOpus};
+use objc2_core_audio::{AudioStreamRangedDescription};
 use super::SampleRateRange;
 
 /// Maximum value for a 20-bit signed integer sample.

@@ -58,6 +58,8 @@ pub mod io_proc;
 pub mod listener;
 pub mod object;
 pub mod property;
+pub(crate) mod encode;
+pub(crate) mod read;
 #[cfg(feature = "process-tap")]
 pub mod tap;
 pub mod traits;

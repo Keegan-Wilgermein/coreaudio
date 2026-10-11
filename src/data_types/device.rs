@@ -1,36 +1,8 @@
 //! Device-level enums: hog mode, power hints, transport and terminal types.
 
-use coreaudio_sys::{
-    kAudioDeviceTransportTypeAVB,
-    kAudioDeviceTransportTypeAggregate,
-    kAudioDeviceTransportTypeAirPlay,
-    kAudioDeviceTransportTypeAutoAggregate,
-    kAudioDeviceTransportTypeBluetooth,
-    kAudioDeviceTransportTypeBluetoothLE,
-    kAudioDeviceTransportTypeBuiltIn,
-    kAudioDeviceTransportTypeContinuityCapture,
-    kAudioDeviceTransportTypeContinuityCaptureWired,
-    kAudioDeviceTransportTypeContinuityCaptureWireless,
-    kAudioDeviceTransportTypeDisplayPort,
-    kAudioDeviceTransportTypeFireWire,
-    kAudioDeviceTransportTypeHDMI,
-    kAudioDeviceTransportTypePCI,
-    kAudioDeviceTransportTypeThunderbolt,
-    kAudioDeviceTransportTypeUSB,
-    kAudioDeviceTransportTypeVirtual,
-    kAudioStreamTerminalTypeDigitalAudioInterface,
-    kAudioStreamTerminalTypeDisplayPort,
-    kAudioStreamTerminalTypeHDMI,
-    kAudioStreamTerminalTypeHeadphones,
-    kAudioStreamTerminalTypeHeadsetMicrophone,
-    kAudioStreamTerminalTypeLFESpeaker,
-    kAudioStreamTerminalTypeLine,
-    kAudioStreamTerminalTypeMicrophone,
-    kAudioStreamTerminalTypeReceiverMicrophone,
-    kAudioStreamTerminalTypeReceiverSpeaker,
-    kAudioStreamTerminalTypeSpeaker,
-    kAudioStreamTerminalTypeTTY,
-};
+#![allow(deprecated)] // `kAudioDeviceTransportTypeContinuityCapture` is still reported by older systems
+
+use objc2_core_audio::{kAudioDeviceTransportTypeAVB, kAudioDeviceTransportTypeAggregate, kAudioDeviceTransportTypeAirPlay, kAudioDeviceTransportTypeAutoAggregate, kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE, kAudioDeviceTransportTypeBuiltIn, kAudioDeviceTransportTypeContinuityCapture, kAudioDeviceTransportTypeContinuityCaptureWired, kAudioDeviceTransportTypeContinuityCaptureWireless, kAudioDeviceTransportTypeDisplayPort, kAudioDeviceTransportTypeFireWire, kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypePCI, kAudioDeviceTransportTypeThunderbolt, kAudioDeviceTransportTypeUSB, kAudioDeviceTransportTypeVirtual, kAudioStreamTerminalTypeDigitalAudioInterface, kAudioStreamTerminalTypeDisplayPort, kAudioStreamTerminalTypeHDMI, kAudioStreamTerminalTypeHeadphones, kAudioStreamTerminalTypeHeadsetMicrophone, kAudioStreamTerminalTypeLFESpeaker, kAudioStreamTerminalTypeLine, kAudioStreamTerminalTypeMicrophone, kAudioStreamTerminalTypeReceiverMicrophone, kAudioStreamTerminalTypeReceiverSpeaker, kAudioStreamTerminalTypeSpeaker, kAudioStreamTerminalTypeTTY};
 use crate::errors::{CoreAudioError, ErrorKind};
 
 /// Whether this process holds exclusive access to a device.

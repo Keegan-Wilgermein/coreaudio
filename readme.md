@@ -294,16 +294,16 @@ Properties marked **both** require both calls (in either order).
 
 | Constant | Type | Access | Listenable | Extra |
 |---|---|---|---|---|
-| `OBJECT_BASE_CLASS` | `u32` | Read | No | — |
-| `OBJECT_CLASS` | `u32` | Read | No | — |
-| `OBJECT_OWNER` | `u32` | Read | No | — |
+| `OBJECT_BASE_CLASS` | `u32` | Read | Yes | — |
+| `OBJECT_CLASS` | `u32` | Read | Yes | — |
+| `OBJECT_OWNER` | `u32` | Read | Yes | — |
 | `OBJECT_MODEL_NAME` | `String` | Read | No | — |
-| `OBJECT_MANUFACTURER` | `String` | Read | No | — |
-| `OBJECT_CREATOR` | `String` | Read | No | — |
-| `OBJECT_ELEMENT_NAME` | `String` | Read | No | element |
+| `OBJECT_MANUFACTURER` | `String` | Read | Yes | — |
+| `OBJECT_CREATOR` | `String` | Read | Yes | — |
+| `OBJECT_ELEMENT_NAME` | `String` | Read/Write | Yes | element |
 | `OBJECT_ELEMENT_CATEGORY_NAME` | `String` | Read | No | element |
 | `OBJECT_ELEMENT_NUMBER_NAME` | `String` | Read | No | element |
-| `OBJECT_OWNED_OBJECTS` | `Vec<u32>` | Read | No | qualifier: `Vec<u32>` |
+| `OBJECT_OWNED_OBJECTS` | `Vec<u32>` | Read | Yes | qualifier: `Vec<u32>` |
 
 ### Device properties
 
@@ -311,40 +311,40 @@ Properties marked **both** require both calls (in either order).
 | Constant | Type | Access | Listenable | Extra |
 |---|---|---|---|---|
 | `DEVICE_NAME` | `String` | Read | Yes | — |
-| `DEVICE_UID` | `String` | Read | No | — |
-| `DEVICE_MODEL_UID` | `String` | Read | No | — |
-| `DEVICE_CONFIGURATION_APPLICATION` | `String` | Read | No | — |
-| `DEVICE_TRANSPORT_TYPE` | `TransportType` | Read | No | — |
+| `DEVICE_UID` | `String` | Read | Yes | — |
+| `DEVICE_MODEL_UID` | `String` | Read | Yes | — |
+| `DEVICE_CONFIGURATION_APPLICATION` | `String` | Read | Yes | — |
+| `DEVICE_TRANSPORT_TYPE` | `TransportType` | Read | Yes | — |
 | `DEVICE_IS_ALIVE` | `bool` | Read | Yes | — |
 | `DEVICE_IS_RUNNING` | `bool` | Read | Yes | — |
-| `DEVICE_IS_HIDDEN` | `bool` | Read | No | — |
+| `DEVICE_IS_HIDDEN` | `bool` | Read | Yes | — |
 | `DEVICE_CAN_BE_DEFAULT` | `bool` | Read | No | — |
 | `DEVICE_CAN_BE_DEFAULT_SYSTEM` | `bool` | Read | No | — |
 | `DEVICE_NOMINAL_SAMPLE_RATE` | `f64` | Read/Write | Yes | — |
 | `DEVICE_AVAILABLE_SAMPLE_RATES` | `Vec<SampleRateRange>` | Read | Yes | — |
 | `DEVICE_BUFFER_FRAME_SIZE` | `u32` | Read/Write | Yes | — |
-| `DEVICE_BUFFER_FRAME_SIZE_RANGE` | `BufferFrameSizeRange` | Read | No | — |
+| `DEVICE_BUFFER_FRAME_SIZE_RANGE` | `BufferFrameSizeRange` | Read | Yes | — |
 | `DEVICE_USES_VARIABLE_BUFFER_FRAME_SIZES` | `u32` | Read | No | — |
-| `DEVICE_INPUT_LATENCY` | `u32` | Read | No | — |
-| `DEVICE_OUTPUT_LATENCY` | `u32` | Read | No | — |
+| `DEVICE_INPUT_LATENCY` | `u32` | Read | Yes | — |
+| `DEVICE_OUTPUT_LATENCY` | `u32` | Read | Yes | — |
 | `DEVICE_SAFETY_OFFSET` | `u32` | Read | No | — |
-| `DEVICE_CLOCK_DOMAIN` | `u32` | Read | No | — |
+| `DEVICE_CLOCK_DOMAIN` | `u32` | Read | Yes | — |
 | `DEVICE_HOG_MODE` | `HogMode` | Read/Write | Yes | — |
-| `DEVICE_RELATED_DEVICES` | `Vec<u32>` | Read | No | — |
+| `DEVICE_RELATED_DEVICES` | `Vec<u32>` | Read | Yes | — |
 | `DEVICE_PREFERRED_CHANNELS_FOR_STEREO` | `ChannelPair` | Read/Write | No | — |
 | `DEVICE_PREFERRED_CHANNEL_LAYOUT_INPUT` | `ChannelLayout` | Read/Write | Yes | — |
 | `DEVICE_PREFERRED_CHANNEL_LAYOUT_OUTPUT` | `ChannelLayout` | Read/Write | Yes | — |
 | `DEVICE_PROCESSOR_OVERLOAD` | `u32` | Read | Yes | — |
 | `DEVICE_IO_STOPPED_ABNORMALLY` | `u32` | Read | Yes | — |
-| `DEVICE_IO_CYCLE_USAGE` | `f32` | Read/Write | No | — |
+| `DEVICE_IO_CYCLE_USAGE` | `f32` | Read/Write | Yes | — |
 | `DEVICE_CLOCK_SOURCE` | `u32` | Read/Write | Yes | — |
-| `DEVICE_CLOCK_SOURCES` | `Vec<u32>` | Read | No | — |
+| `DEVICE_CLOCK_SOURCES` | `Vec<u32>` | Read | Yes | — |
 | `DEVICE_CLOCK_SOURCE_NAME` | `String` | Read | No | qualifier: `u32` |
 | `DEVICE_PLAY_THRU_DESTINATION` | `u32` | Read/Write | Yes | — |
 | `DEVICE_PLAY_THRU_DESTINATIONS` | `Vec<u32>` | Read | No | — |
 | `DEVICE_PLAY_THRU_DESTINATION_NAME` | `String` | Read | No | qualifier: `u32` |
-| `DEVICE_INPUT_ELEMENT_NAME` | `String` | Read | No | element |
-| `DEVICE_OUTPUT_ELEMENT_NAME` | `String` | Read | No | element |
+| `DEVICE_INPUT_ELEMENT_NAME` | `String` | Read/Write | Yes | element |
+| `DEVICE_OUTPUT_ELEMENT_NAME` | `String` | Read/Write | Yes | element |
 | `DEVICE_GLOBAL_VOLUME_SCALAR` | `f32` | Read/Write | Yes | element |
 | `DEVICE_INPUT_VOLUME_SCALAR` | `f32` | Read/Write | Yes | element |
 | `DEVICE_OUTPUT_VOLUME_SCALAR` | `f32` | Read/Write | Yes | element |
@@ -385,15 +385,15 @@ Properties marked **both** require both calls (in either order).
 | Constant | Type | Access | Listenable | Extra |
 |---|---|---|---|---|
 | `STREAM_NAME` | `String` | Read | Yes | — |
-| `STREAM_IS_ACTIVE` | `bool` | Read | Yes | — |
-| `STREAM_DIRECTION` | `Scope` | Read | No | — |
+| `STREAM_IS_ACTIVE` | `bool` | Read/Write | Yes | — |
+| `STREAM_DIRECTION` | `Scope` | Read | Yes | — |
 | `STREAM_LATENCY` | `u32` | Read | Yes | — |
 | `STREAM_VIRTUAL_FORMAT` | `StreamDescription` | Read/Write | Yes | — |
 | `STREAM_PHYSICAL_FORMAT` | `StreamDescription` | Read/Write | Yes | — |
 | `STREAM_AVAILABLE_VIRTUAL_FORMATS` | `Vec<StreamRangedDescription>` | Read | Yes | — |
 | `STREAM_AVAILABLE_PHYSICAL_FORMATS` | `Vec<StreamRangedDescription>` | Read | Yes | — |
-| `TERMINAL_TYPE` | `TerminalType` | Read | No | — |
-| `STARTING_CHANNEL` | `u32` | Read | No | — |
+| `TERMINAL_TYPE` | `TerminalType` | Read | Yes | — |
+| `STARTING_CHANNEL` | `u32` | Read | Yes | — |
 
 ### System properties
 
@@ -469,7 +469,7 @@ The `FormatId` enum covers Linear PCM, AAC (Standard, HE, HEv2, LD, ELD, ELDv2, 
 
 ## Roadmap
 
-- Dedicated `AudioObject<Clock>` and `AudioObject<Box>` with unique methods
+- Dedicated `AudioObject<Clock>`, `AudioObject<Box>`, and `AudioObject<Unit>` with unique methods
 - Add new wrappers and 'multi-properties' that combine multiple properties into one for things that shouldn't have to be seperate calls
 
 ## Disclaimer

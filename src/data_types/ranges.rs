@@ -1,9 +1,7 @@
 //! Value ranges and channel pairs.
 
 use std::ops::RangeInclusive;
-use coreaudio_sys::{
-    AudioValueRange,
-};
+use objc2_core_audio_types::{AudioValueRange};
 
 /// The range of buffer frame sizes a device supports.
 ///

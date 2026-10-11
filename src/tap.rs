@@ -13,7 +13,7 @@
 
 // ---- Imports ------------
 use crate::{errors::{CoreAudioError, OSStatusCheck}, object::{AudioObject, Process, Tap}, property::TAP_UID};
-use coreaudio_sys::AudioObjectID;
+use objc2_core_audio::{AudioObjectID};
 use objc2::AllocAnyThread;
 use objc2_core_audio::{AudioHardwareCreateProcessTap, AudioHardwareDestroyProcessTap, CATapDescription, CATapMuteBehavior};
 use objc2_foundation::{NSArray, NSNumber, NSString};

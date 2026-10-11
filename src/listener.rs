@@ -15,7 +15,9 @@
 
 // ---- Imports --------
 use std::{ffi::c_void, marker::PhantomData, sync::mpsc::{self, Receiver, RecvTimeoutError, Sender}, time::Duration};
-use coreaudio_sys::{AudioObjectAddPropertyListener, AudioObjectID, AudioObjectPropertyAddress, AudioObjectRemovePropertyListener, OSStatus};
+use std::ptr::NonNull;
+use objc2_core_audio::{AudioObjectAddPropertyListener, AudioObjectID, AudioObjectPropertyAddress, AudioObjectRemovePropertyListener};
+use crate::errors::OSStatus;
 use crate::{Property, data_types::PropertySize, errors::{CoreAudioError, ErrorKind, OSStatusCheck}, object::get_property_internal, property::{Listenable, NoExtra, Qualifier}};
 
 // ---- Structs ------------
@@ -79,7 +81,7 @@ impl<T, D, A> Drop for PropertyListener<T, D, A> {
         unsafe {
             AudioObjectRemovePropertyListener(
                 self.listener.id,
-                &self.listener.address,
+                std::ptr::NonNull::from(&self.listener.address),
                 Some(io_callback::<T, D, A>),
                 self.callback_client_data as *mut c_void,
             );
@@ -110,7 +112,7 @@ impl<T, D, A> PropertyListener<T, D, A> {
         unsafe {
             AudioObjectAddPropertyListener(
                 id,
-                &address,
+                std::ptr::NonNull::from(&address),
                 Some(io_callback::<T, D, A>),
                 callback_client_data as *mut c_void,
             ).check()?;
@@ -216,7 +218,7 @@ impl<T, D, A> Drop for CallbackListener<T, D, A> {
         unsafe {
             AudioObjectRemovePropertyListener(
                 self.listener.id,
-                &self.listener.address,
+                std::ptr::NonNull::from(&self.listener.address),
                 Some(sink_callback::<T, D, A>),
                 self.callback_client_data as *mut c_void,
             );
@@ -247,7 +249,7 @@ impl<T, D, A> CallbackListener<T, D, A> {
         let status = unsafe {
             AudioObjectAddPropertyListener(
                 id,
-                &address,
+                std::ptr::NonNull::from(&address),
                 Some(sink_callback::<T, D, A>),
                 callback_client_data as *mut c_void,
             ).check()
@@ -280,10 +282,10 @@ impl<T, D, A> CallbackListener<T, D, A> {
 /// Called by CoreAudio on a private thread whenever the watched property
 /// changes. Reads the new property value and sends it over the MPSC channel
 /// so that the owning [`PropertyListener`] can deliver it to the caller.
-unsafe extern "C" fn io_callback<T, D, A>(
+unsafe extern "C-unwind" fn io_callback<T, D, A>(
     device_id: u32,
     _queue: u32,
-    address: *const AudioObjectPropertyAddress,
+    address: NonNull<AudioObjectPropertyAddress>,
     client_data: *mut c_void,
 ) -> OSStatus {
     let client_data = unsafe {
@@ -291,7 +293,7 @@ unsafe extern "C" fn io_callback<T, D, A>(
     };
 
     let property: Property<T, D, A, Listenable, NoExtra> = Property::new(
-        unsafe { *address },
+        unsafe { *address.as_ptr() },
         client_data.size,
         client_data.read,
         // Never written to: the callback only reads.
@@ -314,10 +316,10 @@ unsafe extern "C" fn io_callback<T, D, A>(
 /// Called by CoreAudio on a private thread whenever the watched property
 /// changes. Reads the new value and hands it, or the error reading it, to the
 /// listener's sink.
-unsafe extern "C" fn sink_callback<T, D, A>(
+unsafe extern "C-unwind" fn sink_callback<T, D, A>(
     device_id: u32,
     _queue: u32,
-    address: *const AudioObjectPropertyAddress,
+    address: NonNull<AudioObjectPropertyAddress>,
     client_data: *mut c_void,
 ) -> OSStatus {
     let client_data = unsafe {
@@ -325,7 +327,7 @@ unsafe extern "C" fn sink_callback<T, D, A>(
     };
 
     let property: Property<T, D, A, Listenable, NoExtra> = Property::new(
-        unsafe { *address },
+        unsafe { *address.as_ptr() },
         client_data.size,
         client_data.read,
         // Never written to: the callback only reads.

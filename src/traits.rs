@@ -6,8 +6,13 @@
 //! `.for_element()`) that complete partially-specified property constants before
 //! they can be used.
 
+use std::ptr::NonNull;
+
+use objc2_core_audio::AudioObjectPropertyAddress;
+
 // ---- Imports ------------
-use crate::{Device, Global, Process, Property, SampleRateRange, Stream, System, Tap, property::{Listenable, NeedBoth, NeedElement, NeedQualifier, NoExtra, Qualifier, ReadWrite, bytes_u32, bytes_vec_u32}};
+use crate::{Device, Global, Process, Property, SampleRateRange, Stream, System, Tap, property::{Listenable, NeedBoth, NeedElement, NeedQualifier, NoExtra, Qualifier, ReadWrite}};
+use crate::encode::{bytes_u32, bytes_vec_u32};
 
 // ---- Traits ------------
 
@@ -245,5 +250,46 @@ impl ValidSampleRates for Vec<SampleRateRange> {
         .map(|range| {
             range.get_min()
         }).collect()
+    }
+}
+
+/// Wraps a reference to a value in a `NonNull` pointing at that same value.
+///
+/// The pointer is only valid for as long as the value is, so call it on a
+/// place that outlives the FFI call, not on a temporary.
+pub(crate) trait IntoNonNull {
+    /// Wraps `&mut self` into a `NonNull<Self>`
+    fn non_null(&mut self) -> NonNull<Self>
+    where
+        Self: Sized,
+    {
+        NonNull::from(self)
+    }
+}
+
+impl IntoNonNull for AudioObjectPropertyAddress {}
+impl IntoNonNull for u32 {}
+
+/// Wraps a raw pointer in a `NonNull` pointing at the same data.
+///
+/// Unlike [`IntoNonNull`], which points at its own copy of the value, this
+/// keeps the pointer's target, so it's the one to use for buffers.
+pub(crate) trait PtrIntoNonNull<T> {
+    /// Wraps the pointer into a `NonNull<T>` without checking for null
+    ///
+    /// # Safety
+    /// The pointer must not be null.
+    unsafe fn non_null(self) -> NonNull<T>;
+}
+
+impl<T> PtrIntoNonNull<T> for *mut T {
+    unsafe fn non_null(self) -> NonNull<T> {
+        unsafe { NonNull::new_unchecked(self) }
+    }
+}
+
+impl<T> PtrIntoNonNull<T> for *const T {
+    unsafe fn non_null(self) -> NonNull<T> {
+        unsafe { NonNull::new_unchecked(self as *mut _) }
     }
 }

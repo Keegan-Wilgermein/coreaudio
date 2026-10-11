@@ -9,7 +9,7 @@
 use crate::{data_types::{ChannelDescription, ChannelLayout, ChannelLayoutTag}, errors::{CoreAudioError, OSStatusCheck}};
 use std::{ffi::c_void, ptr::null_mut};
 use core_foundation::{base::TCFType, string::{CFString, CFStringRef}};
-use coreaudio_sys::{AudioFormatGetProperty, AudioFormatGetPropertyInfo, AudioFormatPropertyID, kAudioFormatProperty_ChannelLayoutForTag, kAudioFormatProperty_ChannelLayoutName, kAudioFormatProperty_ChannelLayoutSimpleName, kAudioFormatProperty_ChannelName, kAudioFormatProperty_ChannelShortName};
+use objc2_audio_toolbox::{AudioFormatGetProperty, AudioFormatGetPropertyInfo, AudioFormatPropertyID, kAudioFormatProperty_ChannelLayoutForTag, kAudioFormatProperty_ChannelLayoutName, kAudioFormatProperty_ChannelLayoutSimpleName, kAudioFormatProperty_ChannelName, kAudioFormatProperty_ChannelShortName};
 
 // ---- Functions -----------
 
@@ -48,7 +48,7 @@ fn get_bytes(property: AudioFormatPropertyID, specifier: &[u8]) -> Result<Vec<u8
             property,
             specifier.len() as u32,
             specifier.as_ptr() as *const c_void,
-            &mut size,
+            (&mut size).into(),
         ).check()?;
 
         let mut buffer = vec![0u8; size as usize];

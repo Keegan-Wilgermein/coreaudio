@@ -8,6 +8,7 @@
 
 // ---- Imports ------------
 use crate::{errors::{CoreAudioError, OSStatusCheck}, object::{AudioObject, Device}};
+use std::ffi::CStr;
 use core_foundation::{
     array::CFArray,
     base::TCFType,
@@ -15,7 +16,7 @@ use core_foundation::{
     dictionary::CFDictionary,
     string::CFString,
 };
-use coreaudio_sys::{
+use objc2_core_audio::{
     AudioHardwareCreateAggregateDevice, AudioHardwareDestroyAggregateDevice, AudioObjectID,
     kAudioAggregateDeviceIsPrivateKey, kAudioAggregateDeviceIsStackedKey,
     kAudioAggregateDeviceNameKey, kAudioAggregateDeviceTapAutoStartKey,
@@ -60,8 +61,8 @@ impl AggregateDevice {
         let mut id: AudioObjectID = 0;
         unsafe {
             AudioHardwareCreateAggregateDevice(
-                description.as_concrete_TypeRef() as *const _,
-                &mut id,
+                &*description.as_concrete_TypeRef().cast(),
+                (&mut id).into(),
             ).check()?;
         }
 
@@ -84,9 +85,7 @@ impl Drop for AggregateDevice {
 
 // ---- Functions -----------
 
-/// A dictionary key from one of CoreAudio's NUL-terminated key constants.
-fn key(bytes: &[u8]) -> CFString {
-    let text = std::str::from_utf8(bytes.strip_suffix(&[0]).unwrap_or(bytes)).unwrap_or_default();
-    CFString::new(text)
+/// A dictionary key from one of CoreAudio's key constants.
+fn key(key: &CStr) -> CFString {
+    CFString::new(&key.to_string_lossy())
 }
-

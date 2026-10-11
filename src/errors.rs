@@ -10,8 +10,7 @@
 
 // ---- Imports ------------
 use std::{error::Error, fmt::Display};
-use coreaudio_sys::{
-    OSStatus,
+use objc2_core_audio::{
     kAudioHardwareBadDeviceError,
     kAudioHardwareBadObjectError,
     kAudioHardwareBadPropertySizeError,
@@ -24,16 +23,21 @@ use coreaudio_sys::{
     kAudioHardwareUnsupportedOperationError
 };
 
+// ---- Types ------------
+
+/// CoreAudio's status code type. `objc2-core-audio` keeps its own alias private.
+pub(crate) type OSStatus = i32;
+
 // ---- Constants ------------
 
 /// `OSStatus` code for an unsupported data format error (`'!dat'`).
 #[allow(non_upper_case_globals)]
-const kAudioHardwareUnsupportedFormatError: u32 = 0x21646174;
+const kAudioHardwareUnsupportedFormatError: OSStatus = 0x21646174;
 
 /// `OSStatus` code for a permissions error caused by another process holding
 /// exclusive (hog mode) access to the device (`'!hog'`).
 #[allow(non_upper_case_globals)]
-const kAudioHardwarePermissionsError: u32 = 0x21686F67;
+const kAudioHardwarePermissionsError: OSStatus = 0x21686F67;
 
 // ---- Enums ------------
 
@@ -146,9 +150,9 @@ impl Display for CoreAudioError {
 }
 
 impl From<OSStatus> for CoreAudioError {
-    #[allow(non_upper_case_globals)]
+    #[allow(non_upper_case_globals, non_snake_case)]
     fn from(value: OSStatus) -> Self {
-        let kind = match value as u32 {
+        let kind = match value {
             kAudioHardwareNotRunningError => ErrorKind::NotRunning,
             kAudioHardwareUnspecifiedError => ErrorKind::Unspecified,
             kAudioHardwareUnknownPropertyError => ErrorKind::UnknownProperty,

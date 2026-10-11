@@ -9,7 +9,9 @@
 
 // ---- Imports ------------
 use std::{ffi::c_void};
-use coreaudio_sys::{self, AudioBufferList, AudioDeviceCreateIOProcID, AudioDeviceDestroyIOProcID, AudioDeviceID, AudioDeviceIOProcID, AudioDeviceStart, AudioDeviceStop, AudioTimeStamp, OSStatus};
+use objc2_core_audio_types::{AudioBufferList, AudioTimeStamp};
+use objc2_core_audio::{AudioDeviceCreateIOProcID, AudioDeviceDestroyIOProcID, AudioDeviceID, AudioDeviceIOProcID, AudioDeviceStart, AudioDeviceStop};
+use crate::errors::OSStatus;
 use crate::{Scope, errors::{CoreAudioError, ErrorKind, OSStatusCheck}, object::{AudioObject, Device}};
 
 // ---- Structs ------------
@@ -144,9 +146,11 @@ impl IOProc {
         let created = unsafe {
             AudioDeviceCreateIOProcID(
                 device.id(),
-                Some(io_callback::<F>),
+                // CoreAudio may pass null buffer lists, which the bindings' `NonNull`
+                // can't express; the callback checks for null itself.
+                Some(std::mem::transmute::<RawIOProc, _>(io_callback::<F>)),
                 data_ptr,
-                &mut proc_id,
+                (&mut proc_id).into(),
             ).check()
         };
         if let Err(error) = created {
@@ -213,11 +217,14 @@ impl IOProc {
 
 // ---- Functions ------------
 
+/// [`io_callback`]'s signature with raw pointers, since the buffer lists may be null.
+type RawIOProc = extern "C-unwind" fn(AudioDeviceID, *const AudioTimeStamp, *const AudioBufferList, *const AudioTimeStamp, *mut AudioBufferList, *const AudioTimeStamp, *mut c_void) -> OSStatus;
+
 /// CoreAudio I/O callback invoked once per buffer period.
 ///
 /// Recovers the user closure from `client_data`, wraps each CoreAudio output
 /// buffer as an [`AudioBuffer`], and calls the closure. Returns `0` on success.
-extern "C" fn io_callback<F>(
+extern "C-unwind" fn io_callback<F>(
     _device: AudioDeviceID,
     _now: *const AudioTimeStamp,
     input: *const AudioBufferList,
@@ -238,7 +245,7 @@ where
             Scope::Input => input as *mut AudioBufferList,
             Scope::Output => output,
         };
-        let buffers: &mut [coreaudio_sys::AudioBuffer] = if list.is_null() {
+        let buffers: &mut [objc2_core_audio_types::AudioBuffer] = if list.is_null() {
             &mut []
         } else {
             std::slice::from_raw_parts_mut(
