@@ -1,13 +1,13 @@
-//! Scopes and property sizes.
+//! Scopes and property sizes
 
 use crate::errors::{CoreAudioError, ErrorKind};
 
-/// Whether audio flows into or out of a device.
+/// Whether audio flows into or out of a device
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scope {
-    /// Audio captured from the outside world (microphone, line-in, etc.).
+    /// Audio captured from the outside world (microphone, line-in, etc)
     Input,
-    /// Audio sent to speakers or a line-out.
+    /// Audio sent to speakers or a line-out
     Output,
 }
 

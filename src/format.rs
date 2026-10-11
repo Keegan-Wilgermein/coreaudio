@@ -1,7 +1,7 @@
-//! Channel layout queries answered by AudioToolbox's `AudioFormat` services.
+//! Channel layout queries answered by AudioToolbox's `AudioFormat` services
 //!
 //! These don't touch any device: they expand predefined layouts and give the
-//! display names macOS uses for layouts and speakers.
+//! display names macOS uses for layouts and speakers
 
 #![allow(unsafe_code)]
 
@@ -13,34 +13,34 @@ use objc2_audio_toolbox::{AudioFormatGetProperty, AudioFormatGetPropertyInfo, Au
 
 // ---- Functions -----------
 
-/// Expands a predefined layout into one [`ChannelDescription`] per channel.
+/// Expands a predefined layout into one [`ChannelDescription`] per channel
 pub fn layout_for_tag(tag: ChannelLayoutTag) -> Result<ChannelLayout, CoreAudioError> {
     let specifier = tag.0.to_ne_bytes();
     let bytes = get_bytes(kAudioFormatProperty_ChannelLayoutForTag, &specifier)?;
     ChannelLayout::from_bytes(&bytes)
 }
 
-/// The full name of a layout, e.g. "5.1 (L R C LFE Ls Rs)".
+/// The full name of a layout, e.g. "5.1 (L R C LFE Ls Rs)"
 pub fn layout_name(layout: &ChannelLayout) -> Result<String, CoreAudioError> {
     get_string(kAudioFormatProperty_ChannelLayoutName, &layout.to_bytes())
 }
 
-/// The short name of a layout, e.g. "5.1".
+/// The short name of a layout, e.g. "5.1"
 pub fn layout_simple_name(layout: &ChannelLayout) -> Result<String, CoreAudioError> {
     get_string(kAudioFormatProperty_ChannelLayoutSimpleName, &layout.to_bytes())
 }
 
-/// The name of the speaker a channel feeds, e.g. "Left Surround".
+/// The name of the speaker a channel feeds, e.g. "Left Surround"
 pub fn channel_name(description: &ChannelDescription) -> Result<String, CoreAudioError> {
     get_string(kAudioFormatProperty_ChannelName, &description.to_bytes())
 }
 
-/// The abbreviated name of the speaker a channel feeds, e.g. "Ls".
+/// The abbreviated name of the speaker a channel feeds, e.g. "Ls"
 pub fn channel_short_name(description: &ChannelDescription) -> Result<String, CoreAudioError> {
     get_string(kAudioFormatProperty_ChannelShortName, &description.to_bytes())
 }
 
-/// Reads a variable-length `AudioFormat` property into a byte buffer.
+/// Reads a variable-length `AudioFormat` property into a byte buffer
 fn get_bytes(property: AudioFormatPropertyID, specifier: &[u8]) -> Result<Vec<u8>, CoreAudioError> {
     unsafe {
         let mut size = 0u32;
@@ -65,8 +65,9 @@ fn get_bytes(property: AudioFormatPropertyID, specifier: &[u8]) -> Result<Vec<u8
     }
 }
 
-/// Reads a `CFStringRef` `AudioFormat` property. The string is created for the
-/// caller, so it's taken under the create rule and released on drop.
+/// Reads a `CFStringRef` `AudioFormat` property
+/// The string is created for the caller, so it's taken under the create rule
+/// and released on drop
 fn get_string(property: AudioFormatPropertyID, specifier: &[u8]) -> Result<String, CoreAudioError> {
     unsafe {
         let mut name: CFStringRef = null_mut::<c_void>() as CFStringRef;

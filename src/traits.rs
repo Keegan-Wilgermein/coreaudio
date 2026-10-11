@@ -1,10 +1,11 @@
-//! Marker traits and builder traits for compile-time property validation.
+//! Marker traits and builder traits for compile-time property validation
 //!
 //! These traits are used as bounds on `get_property`, `set_property`, and
 //! `add_listener` to reject invalid calls at compile time with actionable
-//! error messages. They also provide the builder methods (`.with_qualifier()`,
-//! `.for_element()`) that complete partially-specified property constants before
-//! they can be used.
+//! error messages
+//! They also provide the builder methods (`.with_qualifier()`,
+//! `.for_element()`) that complete partially-specified property constants
+//! before they can be used
 
 use std::ptr::NonNull;
 
@@ -16,14 +17,14 @@ use crate::encode::{bytes_u32, bytes_vec_u32};
 
 // ---- Traits ------------
 
-/// Asserts that a property's object type is compatible with an `AudioObject<T>`.
+/// Asserts that a property's object type is compatible with an `AudioObject<T>`
 ///
 /// Implemented for the pairings that CoreAudio permits:
-/// - `System` and `Global` properties work with `AudioObject<System>`.
-/// - `Device` and `Global` properties work with `AudioObject<Device>`.
-/// - `Stream` and `Global` properties work with `AudioObject<Stream>`.
-/// - `Process` and `Global` properties work with `AudioObject<Process>`.
-/// - `Tap` and `Global` properties work with `AudioObject<Tap>`.
+/// - `System` and `Global` properties work with `AudioObject<System>`
+/// - `Device` and `Global` properties work with `AudioObject<Device>`
+/// - `Stream` and `Global` properties work with `AudioObject<Stream>`
+/// - `Process` and `Global` properties work with `AudioObject<Process>`
+/// - `Tap` and `Global` properties work with `AudioObject<Tap>`
 #[diagnostic::on_unimplemented(
     message = "`{Self}` properties are incompatible with `AudioObject<{T}>`",
     label = "Use this with `AudioObject<{Self}>` instead",
@@ -42,10 +43,10 @@ impl ObjectCompatibleWith<Stream> for Global {}
 impl ObjectCompatibleWith<Process> for Global {}
 impl ObjectCompatibleWith<Tap> for Global {}
 
-/// Asserts that a property's access mode permits writing.
+/// Asserts that a property's access mode permits writing
 ///
 /// Only `ReadWrite` properties implement this trait; attempting to call
-/// `set_property` with a `ReadOnly` property produces a compile error.
+/// `set_property` with a `ReadOnly` property produces a compile error
 #[diagnostic::on_unimplemented(
     message = "this property is read-only",
     label = "`set_property()` requires properties with `ReadWrite`",
@@ -54,10 +55,10 @@ pub trait Writeable {}
 
 impl Writeable for ReadWrite {}
 
-/// Asserts that a property supports change listeners.
+/// Asserts that a property supports change listeners
 ///
 /// Only `Listenable` properties implement this trait; attempting to call
-/// `add_listener` with a `Silent` property produces a compile error.
+/// `add_listener` with a `Silent` property produces a compile error
 #[diagnostic::on_unimplemented(
     message = "this property does not support listeners",
     label = "`add_listener()` requires propertes with `Listenable`",
@@ -66,12 +67,12 @@ pub trait CanListen {}
 
 impl CanListen for Listenable {}
 
-/// Asserts that a property has all required data (element and qualifier) set.
+/// Asserts that a property has all required data (element and qualifier) set
 ///
 /// Properties with an `E` parameter of `NoExtra` are fully specified and can
-/// be passed directly to `get_property`, `set_property`, or `add_listener`.
+/// be passed directly to `get_property`, `set_property`, or `add_listener`
 /// Properties with `NeedElement`, `NeedQualifier`, or `NeedBoth` must first be
-/// completed via `.for_element()` or `.with_qualifier()`.
+/// completed via `.for_element()` or `.with_qualifier()`
 #[diagnostic::on_unimplemented(
     message = "this property requires additional data before it can be used",
     label = "check for `.with_qualifier()` or `.for_element()` methods on this property",
@@ -80,23 +81,24 @@ pub trait HasAllData {}
 
 impl HasAllData for NoExtra {}
 
-/// Converts a qualifier value into raw bytes for a property address.
+/// Converts a qualifier value into raw bytes for a property address
 ///
-/// Implement this for any type that can serve as qualifier data. The built-in
-/// implementations cover the types accepted by CoreAudio qualifiers (`u32`,
-/// `Vec<u32>`, and `String`).
+/// Implement this for any type that can serve as qualifier data
+/// The built-in implementations cover the types accepted by CoreAudio
+/// qualifiers (`u32`, `Vec<u32>`, and `String`)
 #[diagnostic::on_unimplemented(
     message = "incorrect qualifier data type",
     label = "check the `.with_qualifier()` method for expected type",
 )]
 pub trait IntoQualifierBytes {
     /// Serialises the qualifier value into a byte vector suitable for passing
-    /// to CoreAudio.
+    /// to CoreAudio
     fn into_bytes(self) -> Vec<u8>;
 
-    /// The qualifier CoreAudio is handed. By default just `into_bytes`;
-    /// types CoreAudio takes by reference (strings, as a `CFStringRef`)
-    /// override it to keep what the bytes point to alive.
+    /// The qualifier CoreAudio is handed
+    /// By default just `into_bytes`; types CoreAudio takes by reference
+    /// (strings, as a `CFStringRef`) override it to keep what the bytes point
+    /// to alive
     fn into_qualifier(self) -> Qualifier
     where
         Self: Sized,
@@ -118,9 +120,9 @@ impl IntoQualifierBytes for Vec<u32> {
 }
 
 impl IntoQualifierBytes for String {
-    /// The text's UTF-8 bytes. CoreAudio takes string qualifiers as a
-    /// `CFStringRef`, which `into_qualifier` builds; this is only for callers
-    /// that want the raw text.
+    /// The text's UTF-8 bytes
+    /// CoreAudio takes string qualifiers as a `CFStringRef`, which
+    /// `into_qualifier` builds; this is only for callers that want the raw text
     fn into_bytes(self) -> Vec<u8> {
         self.into()
     }
@@ -130,20 +132,21 @@ impl IntoQualifierBytes for String {
     }
 }
 
-/// Attaches qualifier data to a property that requires it.
+/// Attaches qualifier data to a property that requires it
 ///
 /// Calling `.with_qualifier(value)` on a `NeedQualifier<T>` or `NeedBoth<T>`
 /// property transitions the `E` type parameter, removing the qualifier
-/// requirement. The resulting property may be fully specified (`NoExtra`) or
-/// may still need an element (`NeedElement`).
+/// requirement
+/// The resulting property may be fully specified (`NoExtra`) or may still need
+/// an element (`NeedElement`)
 #[diagnostic::on_unimplemented(
     message = "this property does not accept qualifier data",
 )]
 pub trait MissingQualifier<T> {
-    /// The property type produced after the qualifier is attached.
+    /// The property type produced after the qualifier is attached
     type Output;
 
-    /// Attaches `qualifier` to this property and returns the updated property.
+    /// Attaches `qualifier` to this property and returns the updated property
     fn with_qualifier(self, qualifier: T) -> Self::Output
     where
         T: IntoQualifierBytes;
@@ -187,20 +190,20 @@ impl<V, D, A, L, T> MissingQualifier<T> for Property<V, D, A, L, NeedBoth<T>> {
     }
 }
 
-/// Sets the element on a property that requires one.
+/// Sets the element on a property that requires one
 ///
 /// Calling `.for_element(n)` on a `NeedElement` or `NeedBoth<T>` property
 /// writes `n` into `mElement` of the property address, transitioning the `E`
-/// type parameter to remove the element requirement.
+/// type parameter to remove the element requirement
 #[diagnostic::on_unimplemented(
     message = "this property does not accept element data",
 )]
 pub trait MissingElement {
-    /// The property type produced after the element is set.
+    /// The property type produced after the element is set
     type Output;
 
     /// Sets `element` as the `mElement` of the property address and returns
-    /// the updated property.
+    /// the updated property
     fn for_element(self, element: u32) -> Self::Output;
 }
 
@@ -253,10 +256,10 @@ impl ValidSampleRates for Vec<SampleRateRange> {
     }
 }
 
-/// Wraps a reference to a value in a `NonNull` pointing at that same value.
+/// Wraps a reference to a value in a `NonNull` pointing at that same value
 ///
 /// The pointer is only valid for as long as the value is, so call it on a
-/// place that outlives the FFI call, not on a temporary.
+/// place that outlives the FFI call, not on a temporary
 pub(crate) trait IntoNonNull {
     /// Wraps `&mut self` into a `NonNull<Self>`
     fn non_null(&mut self) -> NonNull<Self>
@@ -270,15 +273,15 @@ pub(crate) trait IntoNonNull {
 impl IntoNonNull for AudioObjectPropertyAddress {}
 impl IntoNonNull for u32 {}
 
-/// Wraps a raw pointer in a `NonNull` pointing at the same data.
+/// Wraps a raw pointer in a `NonNull` pointing at the same data
 ///
 /// Unlike [`IntoNonNull`], which points at its own copy of the value, this
-/// keeps the pointer's target, so it's the one to use for buffers.
+/// keeps the pointer's target, so it's the one to use for buffers
 pub(crate) trait PtrIntoNonNull<T> {
     /// Wraps the pointer into a `NonNull<T>` without checking for null
     ///
     /// # Safety
-    /// The pointer must not be null.
+    /// The pointer must not be null
     unsafe fn non_null(self) -> NonNull<T>;
 }
 

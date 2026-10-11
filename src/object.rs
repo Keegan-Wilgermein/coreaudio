@@ -1,10 +1,11 @@
-//! CoreAudio object hierarchy: system, device, and stream.
+//! CoreAudio object hierarchy: system, device, and stream
 //!
 //! The central type is [`AudioObject<T>`], where `T` is a marker that selects
-//! which methods are available. The markers are [`System`], [`Device`],
-//! [`Stream`], [`Process`], [`Tap`], and [`Global`]. Property access, listener registration, and I/O
-//! proc creation are all gated through the type system so invalid operations
-//! are rejected at compile time.
+//! which methods are available
+//! The markers are [`System`], [`Device`], [`Stream`], [`Process`], [`Tap`],
+//! and [`Global`]
+//! Property access, listener registration, and I/O proc creation are all gated
+//! through the type system so invalid operations are rejected at compile time
 
 #![allow(unsafe_code)]
 
@@ -15,63 +16,64 @@ use objc2_core_audio::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSiz
 
 // ---- Structs ------------
 
-/// Marker for [`AudioObject`] granting access to properties on any object type.
+/// Marker for [`AudioObject`] granting access to properties on any object type
 ///
 /// `Global` properties are defined on the base `AudioObject` class in CoreAudio
-/// and apply equally to system objects, devices, and streams. A
-/// `Property<_, Global, _, _, _>` constant can be used with any `AudioObject`.
+/// and apply equally to system objects, devices, and streams
+/// A `Property<_, Global, _, _, _>` constant can be used with any `AudioObject`
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Global;
 
-/// Marker for [`AudioObject`] granting access to system-wide HAL properties.
+/// Marker for [`AudioObject`] granting access to system-wide HAL properties
 ///
-/// Construct the system object with `AudioObject::<System>::default()`. It
-/// exposes device enumeration, default device selection, and global HAL state.
+/// Construct the system object with `AudioObject::<System>::default()`
+/// It exposes device enumeration, default device selection, and global HAL
+/// state
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct System;
 
-/// Marker for [`AudioObject`] granting access to device-specific properties.
+/// Marker for [`AudioObject`] granting access to device-specific properties
 ///
 /// Obtain device objects from [`AudioObject::<System>::devices`] or
-/// [`AudioObject::<System>::devices_with_scope`].
+/// [`AudioObject::<System>::devices_with_scope`]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Device;
 
-/// Marker for [`AudioObject`] granting access to stream-specific properties.
+/// Marker for [`AudioObject`] granting access to stream-specific properties
 ///
 /// Obtain stream objects from [`AudioObject::<Device>::streams`] or
-/// [`AudioObject::<Device>::streams_with_scope`].
+/// [`AudioObject::<Device>::streams_with_scope`]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Stream;
 
-/// Marker for [`AudioObject`] granting access to process properties.
+/// Marker for [`AudioObject`] granting access to process properties
 ///
-/// Every process that has used CoreAudio has a process object (macOS 14.2+).
-/// Obtain them from [`AudioObject::<System>::processes`].
+/// Every process that has used CoreAudio has a process object (macOS 14.2+)
+/// Obtain them from [`AudioObject::<System>::processes`]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Process;
 
-/// Marker for [`AudioObject`] granting access to process tap properties.
+/// Marker for [`AudioObject`] granting access to process tap properties
 ///
-/// A tap captures the audio a set of processes output (macOS 14.2+). Create
-/// one with `ProcessTap` (the `process-tap` feature).
+/// A tap captures the audio a set of processes output (macOS 14.2+)
+/// Create one with `ProcessTap` (the `process-tap` feature)
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Tap;
 
-/// A CoreAudio HAL object identified by an `AudioObjectID`.
+/// A CoreAudio HAL object identified by an `AudioObjectID`
 ///
 /// The type parameter `T` is one of [`System`], [`Device`], [`Stream`],
 /// and determines which `impl` blocks — and therefore which methods
-/// and properties — are available on this value.
+/// and properties — are available on this value
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AudioObject<T> {
-    /// Raw CoreAudio object identifier.
+    /// Raw CoreAudio object identifier
     id: AudioObjectID,
     _marker: PhantomData<T>,
 }
 
 impl Default for AudioObject<System> {
-    /// Returns the singleton system object (`kAudioObjectSystemObject`).
+    /// Returns the singleton system object (`kAudioObjectSystemObject`)
     fn default() -> Self {
         Self {
             id: kAudioObjectSystemObject as u32,
@@ -81,7 +83,7 @@ impl Default for AudioObject<System> {
 }
 
 impl From<u32> for AudioObject<Device> {
-    /// Wraps a raw `AudioObjectID` as a device object.
+    /// Wraps a raw `AudioObjectID` as a device object
     fn from(value: u32) -> Self {
         Self {
             id: value,
@@ -91,7 +93,7 @@ impl From<u32> for AudioObject<Device> {
 }
 
 impl From<u32> for AudioObject<Stream> {
-    /// Wraps a raw `AudioObjectID` as a stream object.
+    /// Wraps a raw `AudioObjectID` as a stream object
     fn from(value: u32) -> Self {
         Self {
             id: value,
@@ -101,7 +103,7 @@ impl From<u32> for AudioObject<Stream> {
 }
 
 impl From<u32> for AudioObject<Process> {
-    /// Wraps a raw `AudioObjectID` as a process object.
+    /// Wraps a raw `AudioObjectID` as a process object
     fn from(value: u32) -> Self {
         Self {
             id: value,
@@ -111,7 +113,7 @@ impl From<u32> for AudioObject<Process> {
 }
 
 impl From<u32> for AudioObject<Tap> {
-    /// Wraps a raw `AudioObjectID` as a tap object.
+    /// Wraps a raw `AudioObjectID` as a tap object
     fn from(value: u32) -> Self {
         Self {
             id: value,
@@ -121,7 +123,7 @@ impl From<u32> for AudioObject<Tap> {
 }
 
 impl<C> AudioObject<C> {
-    /// Returns the raw `AudioObjectID` for this object.
+    /// Returns the raw `AudioObjectID` for this object
     pub fn id(&self) -> u32 {
         self.id
     }
@@ -193,10 +195,11 @@ impl<C> AudioObject<C> {
     /// Unlike a normal listener, it calls `sink` on each change
     ///
     /// `sink` runs on CoreAudio's notification thread with the new value, or
-    /// the error reading it. The same property rules apply as for
+    /// the error reading it
+    /// The same property rules apply as for
     /// [`add_listener`](Self::add_listener)
     /// 
-    /// Drop the returned [`CallbackListener`] to unregister.
+    /// Drop the returned [`CallbackListener`] to unregister
     pub fn add_listener_with<V, D, A, L, E, S>(
         &self,
         property: Property<V, D, A, L, E>,
@@ -248,13 +251,13 @@ impl<C> AudioObject<C> {
     /// - Is being called on the correct kind of device
     ///
     /// CoreAudio accepts a listener on any property, so this
-    /// can't misbehave, but it may never fire. It's up to the
-    /// caller to know the property really does notify.
+    /// can't misbehave, but it may never fire
+    /// It's up to the caller to know the property really does notify
     ///
     /// The listener reads the property with no qualifier data, so
-    /// properties that need a qualifier will fail to read. Use
-    /// [`force_add_listener_with`](Self::force_add_listener_with)
-    /// to see those errors.
+    /// properties that need a qualifier will fail to read
+    /// Use [`force_add_listener_with`](Self::force_add_listener_with) to see
+    /// those errors
     ///
     /// Drop the returned [`PropertyListener`] to unregister
     pub unsafe fn force_add_listener<V, D, A, L, E>(
@@ -288,7 +291,7 @@ impl<C> AudioObject<C> {
 
 // ---- Implementation on `AudioObject<System>` --------------------------
 impl AudioObject<System> {
-    /// Returns all audio devices currently known to the HAL, regardless of scope.
+    /// Returns all audio devices currently known to the HAL, regardless of scope
     pub fn devices(&self) ->
     Result<Vec<AudioObject<Device>>, CoreAudioError> {
         Ok(
@@ -300,10 +303,10 @@ impl AudioObject<System> {
         )
     }
 
-    /// Returns all audio devices that have at least one stream in the given scope.
+    /// Returns all audio devices that have at least one stream in the given scope
     ///
     /// Devices with no streams in `scope` (e.g. an output-only device queried
-    /// with `Scope::Input`) are excluded from the result.
+    /// with `Scope::Input`) are excluded from the result
     pub fn devices_with_scope(&self, scope: Scope) ->
     Result<Vec<AudioObject<Device>>, CoreAudioError> {
         let all_devices = self.devices()?;
@@ -319,8 +322,9 @@ impl AudioObject<System> {
     }
 
     /// Returns every process object the HAL knows: each process that has used
-    /// CoreAudio (macOS 14.2+). Listen to [`crate::SYSTEM_PROCESS_OBJECT_LIST`]
-    /// to hear processes come and go.
+    /// CoreAudio (macOS 14.2+)
+    /// Listen to [`crate::SYSTEM_PROCESS_OBJECT_LIST`] to hear processes come
+    /// and go
     pub fn processes(&self) ->
     Result<Vec<AudioObject<Process>>, CoreAudioError> {
         Ok(
@@ -331,7 +335,7 @@ impl AudioObject<System> {
         )
     }
 
-    /// Returns the device currently selected as the system default for `scope`.
+    /// Returns the device currently selected as the system default for `scope`
     pub fn current_device(&self, scope: Scope) ->
     Result<AudioObject<Device>, CoreAudioError> {
         let id = match scope {
@@ -345,9 +349,9 @@ impl AudioObject<System> {
 
 // ---- Implementation on `AudioObject<Device>` --------------------------
 impl AudioObject<Device> {
-    /// Returns all streams on this device, regardless of scope.
+    /// Returns all streams on this device, regardless of scope
     ///
-    /// Input and output streams are combined into a single list.
+    /// Input and output streams are combined into a single list
     pub fn streams(&self) ->
     Result<Vec<AudioObject<Stream>>, CoreAudioError> {
         let mut streams = self.get_property(DEVICE_INPUT_STREAMS)?;
@@ -363,7 +367,7 @@ impl AudioObject<Device> {
         )
     }
 
-    /// Returns all streams on this device in the given scope.
+    /// Returns all streams on this device in the given scope
     pub fn streams_with_scope(&self, scope: Scope) ->
     Result<Vec<AudioObject<Stream>>, CoreAudioError> {
         let streams = match scope {
@@ -379,10 +383,10 @@ impl AudioObject<Device> {
     }
 
     /// Registers an audio render callback on this device and returns the
-    /// resulting [`IOProc`].
+    /// resulting [`IOProc`]
     ///
-    /// The callback receives a slice of [`AudioBuffer`]s once per I/O cycle.
-    /// Call [`IOProc::play`] to start audio delivery.
+    /// The callback receives a slice of [`AudioBuffer`]s once per I/O cycle
+    /// Call [`IOProc::play`] to start audio delivery
     pub fn add_io_proc<F>(
         &self,
         scope: Scope,
@@ -406,11 +410,11 @@ impl AudioObject<Tap> {}
 
 // ---- Functions -----------
 
-/// Reads a property from the object identified by `id`.
+/// Reads a property from the object identified by `id`
 ///
 /// Calls `AudioObjectGetPropertyDataSize` to determine the required buffer
 /// size, allocates the buffer, then calls `AudioObjectGetPropertyData` and
-/// deserialises the result using `property.read`.
+/// deserialises the result using `property.read`
 pub(crate) fn get_property_internal<V, D, A, L, E>(
     id: AudioObjectID,
     mut property: Property<V, D, A, L, E>,
@@ -433,11 +437,11 @@ pub(crate) fn get_property_internal<V, D, A, L, E>(
     }
  }
 
-/// Writes a property value to the object identified by `id`.
+/// Writes a property value to the object identified by `id`
 ///
 /// Calls `property.encode` to serialise `value` to bytes, then passes those
-/// bytes to `AudioObjectSetPropertyData`. Ignores the access marker: CoreAudio
-/// decides whether the write is allowed.
+/// bytes to `AudioObjectSetPropertyData`
+/// Ignores the access marker: CoreAudio decides whether the write is allowed
 pub(crate) fn set_property_internal<V, D, A, L, E>(
     id: AudioObjectID,
     mut property: Property<V, D, A, L, E>,

@@ -21,9 +21,9 @@ This crate provides typed access to audio devices, streams, and system-level aud
 ## Requirements
 
 - macOS (the crate is gated with `#[cfg(target_os = "macos")]`)
-- [`coreaudio-sys`](https://crates.io/crates/coreaudio-sys) for raw FFI bindings
+- [`objc2-core-audio`](https://crates.io/crates/objc2-core-audio) for raw FFI bindings
 - [`core-foundation`](https://crates.io/crates/core-foundation) for `CFString` handling
-- macOS 14.2+ for process objects and taps. The optional `process-tap` feature adds [`objc2-core-audio`](https://crates.io/crates/objc2-core-audio) for `CATapDescription`; a binary built with it won't launch on older macOS
+- macOS 14.2+ for process objects and taps. The optional `process-tap` feature adds [`objc2`](https://crates.io/crates/objc2) and [`objc2-foundation`](https://crates.io/crates/objc2-foundation) which won't compile on older verisons of macOS.
 
 ## Quick start
 
@@ -327,7 +327,8 @@ Properties marked **both** require both calls (in either order).
 | `DEVICE_USES_VARIABLE_BUFFER_FRAME_SIZES` | `u32` | Read | No | — |
 | `DEVICE_INPUT_LATENCY` | `u32` | Read | Yes | — |
 | `DEVICE_OUTPUT_LATENCY` | `u32` | Read | Yes | — |
-| `DEVICE_SAFETY_OFFSET` | `u32` | Read | No | — |
+| `DEVICE_SAFETY_OFFSET_INPUT` | `u32` | Read | No | — |
+| `DEVICE_SAFETY_OFFSET_OUTPUT` | `u32` | Read | No | — |
 | `DEVICE_CLOCK_DOMAIN` | `u32` | Read | Yes | — |
 | `DEVICE_HOG_MODE` | `HogMode` | Read/Write | Yes | — |
 | `DEVICE_RELATED_DEVICES` | `Vec<u32>` | Read | Yes | — |

@@ -1,8 +1,8 @@
-//! Private aggregate devices built around a process tap.
+//! Private aggregate devices built around a process tap
 //!
 //! A tap on its own has no IO; putting it in an aggregate device turns it into
 //! an ordinary [`AudioObject<Device>`] with input streams, so its audio is read
-//! with [`AudioObject::<Device>::add_io_proc`] like any input device.
+//! with [`AudioObject::<Device>::add_io_proc`] like any input device
 
 #![allow(unsafe_code)]
 
@@ -26,11 +26,11 @@ use objc2_core_audio::{
 
 // ---- Structs ------------
 
-/// A private aggregate device, destroyed when dropped.
+/// A private aggregate device, destroyed when dropped
 ///
 /// Private aggregates are only visible to the process that created them: they
 /// never show in Audio MIDI Setup, System Settings or any other app, and macOS
-/// destroys them if the process exits without dropping them.
+/// destroys them if the process exits without dropping them
 pub struct AggregateDevice {
     device: AudioObject<Device>,
 }
@@ -38,10 +38,10 @@ pub struct AggregateDevice {
 impl AggregateDevice {
     /// Creates a private aggregate whose only content is the tap with UID
     /// `tap_uid` (see [`TAP_UID`](crate::TAP_UID)), started along with the
-    /// aggregate and clocked by the tap itself.
+    /// aggregate and clocked by the tap itself
     ///
-    /// `uid` must be unique among the process's aggregates. Drop the
-    /// aggregate before the tap it reads.
+    /// `uid` must be unique among the process's aggregates
+    /// Drop the aggregate before the tap it reads
     pub fn with_tap(name: &str, uid: &str, tap_uid: &str) -> Result<Self, CoreAudioError> {
         let tap = CFDictionary::from_CFType_pairs(&[
             (key(kAudioSubTapUIDKey), CFString::new(tap_uid).as_CFType()),
@@ -69,7 +69,7 @@ impl AggregateDevice {
         Ok(Self { device: AudioObject::<Device>::from(id) })
     }
 
-    /// The aggregate as a device, to read properties from and add an IO proc to.
+    /// The aggregate as a device, to read properties from and add an IO proc to
     pub fn device(&self) -> AudioObject<Device> {
         self.device
     }
@@ -85,7 +85,7 @@ impl Drop for AggregateDevice {
 
 // ---- Functions -----------
 
-/// A dictionary key from one of CoreAudio's key constants.
+/// A dictionary key from one of CoreAudio's key constants
 fn key(key: &CStr) -> CFString {
     CFString::new(&key.to_string_lossy())
 }

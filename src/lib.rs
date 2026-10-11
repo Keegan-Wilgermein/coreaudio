@@ -1,36 +1,37 @@
 //! # coreaudio
 //!
-//! A safe, idiomatic Rust wrapper around the macOS CoreAudio Hardware Abstraction Layer (HAL).
+//! A safe, idiomatic Rust wrapper around the macOS CoreAudio Hardware Abstraction Layer (HAL)
 //!
 //! This crate models the CoreAudio object hierarchy — system, devices, and streams — as
 //! generic [`AudioObject<T>`] types, where the type parameter determines which properties
-//! and operations are available. Properties carry compile-time metadata encoding their
-//! value type, access mode (read-only vs read-write), and whether they support listeners,
-//! so invalid operations are caught at compile time rather than at runtime.
+//! and operations are available
+//! Properties carry compile-time metadata encoding their value type, access
+//! mode (read-only vs read-write), and whether they support listeners, so
+//! invalid operations are caught at compile time rather than at runtime
 //!
 //! ## Core concepts
 //!
-//! - **[`AudioObject<System>`]** is the entry point. Use it to enumerate devices or
-//!   query system-wide audio state.
-//! - **[`AudioObject<Device>`]** represents a single audio device. Read and write
-//!   properties like sample rate and buffer size, enumerate streams, or register
-//!   IO procs for audio rendering.
-//! - **[`AudioObject<Stream>`]** represents an individual stream on a device. Inspect
-//!   its virtual/physical format, direction, and latency.
-//! - **[`AudioObject<Process>`]** represents a process using CoreAudio (macOS 14.2+).
-//!   List them with `processes()` and read their PID, bundle ID and running state.
+//! - **[`AudioObject<System>`]** is the entry point
+//!   Use it to enumerate devices or query system-wide audio state
+//! - **[`AudioObject<Device>`]** represents a single audio device
+//!   Read and write properties like sample rate and buffer size, enumerate
+//!   streams, or register IO procs for audio rendering
+//! - **[`AudioObject<Stream>`]** represents an individual stream on a device
+//!   Inspect its virtual/physical format, direction, and latency
+//! - **[`AudioObject<Process>`]** represents a process using CoreAudio (macOS 14.2+)
+//!   List them with `processes()` and read their PID, bundle ID and running state
 //! - **[`AggregateDevice`]** is a private aggregate device; with the `process-tap`
-//!   feature, `ProcessTap` captures an app's audio and an aggregate makes it readable.
+//!   feature, `ProcessTap` captures an app's audio and an aggregate makes it readable
 //! - **[`Property`] constants** (e.g. [`DEVICE_NAME`], [`DEVICE_NOMINAL_SAMPLE_RATE`])
-//!   are passed to `get_property`, `set_property`, and `add_listener`. The type system
-//!   enforces that you can only write to read-write properties and only listen to
-//!   listenable ones.
+//!   are passed to `get_property`, `set_property`, and `add_listener`
+//!   The type system enforces that you can only write to read-write properties
+//!   and only listen to listenable ones
 //! - **[`PropertyListener`]** watches a property for changes, offering non-blocking,
-//!   blocking, and timeout-based polling.
+//!   blocking, and timeout-based polling
 //! - **[`CallbackListener`]** watches a property and hands every change straight
-//!   to a closure, so nothing has to wait on a thread for it.
+//!   to a closure, so nothing has to wait on a thread for it
 //! - **[`IOProc`]** wraps a CoreAudio I/O procedure, letting you register an audio
-//!   render callback and control playback.
+//!   render callback and control playback
 //!
 //! ## Quick start
 //!
@@ -88,6 +89,11 @@ pub use data_types::{
     StreamRangedDescription,
     TerminalType,
     TransportType,
+    SMPTETime,
+    SMPTETimeKind,
+    SMPTETimeStatus,
+    TimeFlags,
+    Time,
 };
 
 // Errors
@@ -220,7 +226,8 @@ pub use property::{
     DEVICE_PREFERRED_CHANNELS_FOR_STEREO,
     DEVICE_PROCESSOR_OVERLOAD,
     DEVICE_RELATED_DEVICES,
-    DEVICE_SAFETY_OFFSET,
+    DEVICE_SAFETY_OFFSET_INPUT,
+    DEVICE_SAFETY_OFFSET_OUTPUT,
     DEVICE_SOLO,
     DEVICE_STEREO_PAN,
     DEVICE_STEREO_PAN_CHANNELS,

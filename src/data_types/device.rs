@@ -1,19 +1,19 @@
-//! Device-level enums: hog mode, power hints, transport and terminal types.
+//! Device-level enums: hog mode, power hints, transport and terminal types
 
 #![allow(deprecated)] // `kAudioDeviceTransportTypeContinuityCapture` is still reported by older systems
 
 use objc2_core_audio::{kAudioDeviceTransportTypeAVB, kAudioDeviceTransportTypeAggregate, kAudioDeviceTransportTypeAirPlay, kAudioDeviceTransportTypeAutoAggregate, kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE, kAudioDeviceTransportTypeBuiltIn, kAudioDeviceTransportTypeContinuityCapture, kAudioDeviceTransportTypeContinuityCaptureWired, kAudioDeviceTransportTypeContinuityCaptureWireless, kAudioDeviceTransportTypeDisplayPort, kAudioDeviceTransportTypeFireWire, kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypePCI, kAudioDeviceTransportTypeThunderbolt, kAudioDeviceTransportTypeUSB, kAudioDeviceTransportTypeVirtual, kAudioStreamTerminalTypeDigitalAudioInterface, kAudioStreamTerminalTypeDisplayPort, kAudioStreamTerminalTypeHDMI, kAudioStreamTerminalTypeHeadphones, kAudioStreamTerminalTypeHeadsetMicrophone, kAudioStreamTerminalTypeLFESpeaker, kAudioStreamTerminalTypeLine, kAudioStreamTerminalTypeMicrophone, kAudioStreamTerminalTypeReceiverMicrophone, kAudioStreamTerminalTypeReceiverSpeaker, kAudioStreamTerminalTypeSpeaker, kAudioStreamTerminalTypeTTY};
 use crate::errors::{CoreAudioError, ErrorKind};
 
-/// Whether this process holds exclusive access to a device.
+/// Whether this process holds exclusive access to a device
 ///
 /// CoreAudio represents hog mode as a PID: `-1` means the device is free,
-/// any other value is the PID of the owning process.
+/// any other value is the PID of the owning process
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HogMode {
-    /// No process holds exclusive access.
+    /// No process holds exclusive access
     Released,
-    /// The device is owned by the process with this PID.
+    /// The device is owned by the process with this PID
     Owned(i32),
 }
 
@@ -35,12 +35,12 @@ impl Into<i32> for HogMode {
     }
 }
 
-/// A hint to the HAL about the system's current power state.
+/// A hint to the HAL about the system's current power state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PowerHint {
-    /// Normal operation; no power-saving constraint.
+    /// Normal operation; no power-saving constraint
     None,
-    /// Prefer lower power consumption in scheduling decisions.
+    /// Prefer lower power consumption in scheduling decisions
     PowerSaving,
 }
 
@@ -65,44 +65,44 @@ impl Into<u32> for PowerHint {
     }
 }
 
-/// The physical connection type between a device and the host system.
+/// The physical connection type between a device and the host system
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportType {
-    /// Integrated hardware (e.g. the MacBook speaker or internal mic).
+    /// Integrated hardware (e.g. the MacBook speaker or internal mic)
     BuiltIn,
-    /// An aggregate device composed of multiple logical devices.
+    /// An aggregate device composed of multiple logical devices
     Aggregate,
-    /// An automatically created aggregate device.
+    /// An automatically created aggregate device
     AutoAggregate,
-    /// A software-only virtual device with no physical hardware.
+    /// A software-only virtual device with no physical hardware
     Virtual,
-    /// PCI or PCIe expansion card.
+    /// PCI or PCIe expansion card
     PCIe,
-    /// Universal Serial Bus.
+    /// Universal Serial Bus
     USB,
-    /// FireWire (IEEE 1394).
+    /// FireWire (IEEE 1394)
     FireWire,
-    /// Bluetooth Classic.
+    /// Bluetooth Classic
     Bluetooth,
-    /// Bluetooth Low Energy.
+    /// Bluetooth Low Energy
     BluetoothLE,
-    /// HDMI audio channel.
+    /// HDMI audio channel
     HDMI,
-    /// DisplayPort audio channel.
+    /// DisplayPort audio channel
     DisplayPort,
-    /// AirPlay wireless streaming.
+    /// AirPlay wireless streaming
     AirPlay,
-    /// Audio Video Bridging (IEEE 802.1 AVB).
+    /// Audio Video Bridging (IEEE 802.1 AVB)
     AVB,
-    /// Thunderbolt (includes USB4 tunnelled Thunderbolt).
+    /// Thunderbolt (includes USB4 tunnelled Thunderbolt)
     Thunderbolt,
-    /// Continuity Camera (iPhone used as webcam/mic).
+    /// Continuity Camera (iPhone used as webcam/mic)
     ContinuityCapture,
-    /// Continuity Camera over a wired USB connection.
+    /// Continuity Camera over a wired USB connection
     ContinuityCaptureWired,
-    /// Continuity Camera over a wireless connection.
+    /// Continuity Camera over a wireless connection
     ContinuityCaptureWireless,
-    /// An unrecognised transport type; contains the raw transport ID.
+    /// An unrecognised transport type; contains the raw transport ID
     Unknown(u32),
 }
 
@@ -132,37 +132,37 @@ impl From<u32> for TransportType {
     }
 }
 
-/// The type of physical endpoint a stream connects to.
+/// The type of physical endpoint a stream connects to
 ///
 /// Reported by `TERMINAL_TYPE` and maps to the `kAudioStreamTerminalType*`
-/// constants in CoreAudio.
+/// constants in CoreAudio
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TerminalType {
-    /// Analog line-level input or output.
+    /// Analog line-level input or output
     Line,
-    /// Digital audio interface such as S/PDIF or AES3.
+    /// Digital audio interface such as S/PDIF or AES3
     DigitalAudioInterface,
-    /// A loudspeaker.
+    /// A loudspeaker
     Speaker,
-    /// Headphone output.
+    /// Headphone output
     Headphones,
-    /// Low-frequency effects (subwoofer) speaker.
+    /// Low-frequency effects (subwoofer) speaker
     LFESpeaker,
-    /// A speaker inside a handset receiver.
+    /// A speaker inside a handset receiver
     ReceiverSpeaker,
-    /// A microphone input.
+    /// A microphone input
     Microphone,
-    /// A combined headset microphone (headphone + mic combo jack).
+    /// A combined headset microphone (headphone + mic combo jack)
     HeadsetMicrophone,
-    /// A microphone in a handset receiver.
+    /// A microphone in a handset receiver
     ReceiverMicrophone,
-    /// Telephone TTY/TDD interface.
+    /// Telephone TTY/TDD interface
     TTY,
-    /// HDMI audio endpoint.
+    /// HDMI audio endpoint
     HDMI,
-    /// DisplayPort audio endpoint.
+    /// DisplayPort audio endpoint
     DisplayPort,
-    /// An unrecognised terminal type; contains the raw value.
+    /// An unrecognised terminal type; contains the raw value
     Unknown(u32),
 }
 

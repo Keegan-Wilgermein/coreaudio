@@ -1,13 +1,15 @@
 //! Process taps: the audio a set of processes output, captured before it's
-//! mixed into any device (macOS 14.2+).
+//! mixed into any device (macOS 14.2+)
 //!
 //! A tap is read through a private aggregate device
 //! ([`AggregateDevice::with_tap`](crate::AggregateDevice::with_tap)), which
-//! turns it into an ordinary input device.
+//! turns it into an ordinary input device
 //!
 //! Tapping needs the user's System Audio Recording permission (Privacy &
-//! Security). Without it a tap is still created, but delivers silence — and a
-//! muting tap still mutes. Check the permission before tapping.
+//! Security)
+//! Without it a tap is still created, but delivers silence — and a muting tap
+//! still mutes
+//! Check the permission before tapping
 
 #![allow(unsafe_code)]
 
@@ -20,15 +22,15 @@ use objc2_foundation::{NSArray, NSNumber, NSString};
 
 // ---- Enums ------------
 
-/// What happens to a tapped process's own output.
+/// What happens to a tapped process's own output
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum TapMute {
-    /// It keeps playing as normal; the tap gets a copy.
+    /// It keeps playing as normal; the tap gets a copy
     #[default]
     Unmuted,
-    /// It's silenced for as long as the tap exists.
+    /// It's silenced for as long as the tap exists
     Muted,
-    /// It's silenced only while the tap is being read.
+    /// It's silenced only while the tap is being read
     MutedWhenTapped,
 }
 
@@ -44,7 +46,7 @@ impl From<TapMute> for CATapMuteBehavior {
 
 // ---- Structs ------------
 
-/// A process tap, destroyed when dropped.
+/// A process tap, destroyed when dropped
 pub struct ProcessTap {
     tap: AudioObject<Tap>,
     uid: String,
@@ -52,12 +54,13 @@ pub struct ProcessTap {
 
 impl ProcessTap {
     /// Taps `processes` mixed down to stereo, named `name`, with `mute`
-    /// applied to their own output. The tap is private to this process.
+    /// applied to their own output
+    /// The tap is private to this process
     ///
     /// The mixdown folds every channel of the processes' output into two, so
     /// on a wide device (many channels, most of them silent) it comes out far
-    /// quieter than the processes actually play. Use
-    /// [`device_stream`](Self::device_stream) to capture them as they are.
+    /// quieter than the processes actually play
+    /// Use [`device_stream`](Self::device_stream) to capture them as they are
     pub fn stereo_mixdown(
         processes: &[AudioObject<Process>],
         name: &str,
@@ -72,8 +75,9 @@ impl ProcessTap {
 
     /// Taps what `processes` play into stream `stream` of the device with UID
     /// `device_uid`, channel for channel and at full level: the tap has that
-    /// stream's channels and runs at the device's rate. Named `name`, with
-    /// `mute` applied to their own output; private to this process.
+    /// stream's channels and runs at the device's rate
+    /// Named `name`, with `mute` applied to their own output; private to this
+    /// process
     pub fn device_stream(
         processes: &[AudioObject<Process>],
         device_uid: &str,
@@ -115,18 +119,18 @@ impl ProcessTap {
         Ok(Self { tap, uid })
     }
 
-    /// The tap object, to read its properties.
+    /// The tap object, to read its properties
     pub fn tap(&self) -> AudioObject<Tap> {
         self.tap
     }
 
-    /// The tap's UID, for [`AggregateDevice::with_tap`](crate::AggregateDevice::with_tap).
+    /// The tap's UID, for [`AggregateDevice::with_tap`](crate::AggregateDevice::with_tap)
     pub fn uid(&self) -> &str {
         &self.uid
     }
 }
 
-/// The process object IDs as the `NSArray<NSNumber>` a tap description takes.
+/// The process object IDs as the `NSArray<NSNumber>` a tap description takes
 fn process_ids(processes: &[AudioObject<Process>]) -> objc2::rc::Retained<NSArray<NSNumber>> {
     let ids: Vec<_> = processes.iter().map(|process| NSNumber::new_u32(process.id())).collect();
     NSArray::from_retained_slice(&ids)
