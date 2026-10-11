@@ -2,7 +2,7 @@
 //! mixed into any device (macOS 14.2+)
 //!
 //! A tap is read through a private aggregate device
-//! ([`AggregateDevice::with_tap`](crate::AggregateDevice::with_tap)), which
+//! ([`AppTapAggregateDevice::with_tap`](crate::AppTapAggregateDevice::with_tap)), which
 //! turns it into an ordinary input device
 //!
 //! Tapping needs the user's System Audio Recording permission (Privacy &
@@ -124,7 +124,7 @@ impl ProcessTap {
         self.tap
     }
 
-    /// The tap's UID, for [`AggregateDevice::with_tap`](crate::AggregateDevice::with_tap)
+    /// The tap's UID, for [`AppTapAggregateDevice::with_tap`](crate::AppTapAggregateDevice::with_tap)
     pub fn uid(&self) -> &str {
         &self.uid
     }

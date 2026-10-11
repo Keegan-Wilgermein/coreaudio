@@ -20,8 +20,10 @@
 //!   Inspect its virtual/physical format, direction, and latency
 //! - **[`AudioObject<Process>`]** represents a process using CoreAudio (macOS 14.2+)
 //!   List them with `processes()` and read their PID, bundle ID and running state
-//! - **[`AggregateDevice`]** is a private aggregate device; with the `process-tap`
-//!   feature, `ProcessTap` captures an app's audio and an aggregate makes it readable
+//! - **[`DeviceAggregateDevice`]** combines several devices into one that is read and
+//!   written through a single IO proc
+//!   With the `process-tap` feature, `ProcessTap` captures an app's audio and an
+//!   [`AppTapAggregateDevice`] makes it readable
 //! - **[`Property`] constants** (e.g. [`DEVICE_NAME`], [`DEVICE_NOMINAL_SAMPLE_RATE`])
 //!   are passed to `get_property`, `set_property`, and `add_listener`
 //!   The type system enforces that you can only write to read-write properties
@@ -51,7 +53,6 @@
 #![cfg(target_os = "macos")]
 
 // ---- Modules ------------
-pub mod aggregate;
 pub mod data_types;
 pub mod errors;
 pub mod format;
@@ -61,6 +62,9 @@ pub mod object;
 pub mod property;
 pub(crate) mod encode;
 pub(crate) mod read;
+pub mod device_aggregate;
+#[cfg(feature = "process-tap")]
+pub mod app_tap_aggregate;
 #[cfg(feature = "process-tap")]
 pub mod tap;
 pub mod traits;
@@ -123,7 +127,9 @@ pub use object::{
 };
 
 // Aggregate devices
-pub use aggregate::AggregateDevice;
+pub use device_aggregate::DeviceAggregateDevice;
+#[cfg(feature = "process-tap")]
+pub use app_tap_aggregate::AppTapAggregateDevice;
 
 // Process taps
 #[cfg(feature = "process-tap")]

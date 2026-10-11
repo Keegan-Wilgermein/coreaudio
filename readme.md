@@ -12,8 +12,9 @@ This crate provides typed access to audio devices, streams, and system-level aud
 - **Property listeners** — Subscribe to property changes with `add_listener`, then poll with `latest()`, drain with `all_since_last_check()`, or block with `block_until_change()` / `block_for_duration()`.
 - **Callback listeners** — `add_listener_with` hands every change straight to a closure on CoreAudio's notification thread, in order, with nothing blocking a thread to wait for it.
 - **Force methods** — `force_set_property`, `force_add_listener` and `force_add_listener_with` skip the property checks for devices that don't follow the usual conventions.
-- **IO Procs** — Register audio render callbacks on devices with `add_io_proc` and control playback with `play()` / `pause()`.
-- **Processes and taps** — List the processes using CoreAudio, and (with the `process-tap` feature) tap one app's audio before it's mixed, read through a private aggregate device like any input.
+- **IO Procs** — Register audio render callbacks on devices with `add_io_proc` and control playback with `play()` / `pause()`. Every buffer also carries the cycle's `Time` stamps, with the sample, host, word clock and SMPTE clocks each returned only if the device filled them in.
+- **Aggregate devices** — Combine several devices into one with `DeviceAggregateDevice`, or (with the `process-tap` feature) wrap a tap in an aggregate with `AppTapAggregateDevice`. Both can be private to your process or public, and are destroyed when dropped.
+- **Processes and taps** — List the processes using CoreAudio, and (with the `process-tap` feature) tap one app's audio before it's mixed, read through an aggregate device like any input.
 - **Channel layouts** — Read, write and listen to a device's speaker layout (`DEVICE_PREFERRED_CHANNEL_LAYOUT_OUTPUT`), expand predefined layouts with `layout_for_tag`, and get macOS's names for layouts and speakers.
 - **Structured error handling** — All CoreAudio `OSStatus` codes are mapped to a typed `ErrorKind` enum with human-readable four-character-code formatting.
 - **Format support** — Rich enums for audio format IDs (Linear PCM, AAC variants, ALAC, AC3, Opus, MP3, etc.), format flags, sample formats, transport types, terminal types, and sample resampling utilities.
@@ -21,9 +22,9 @@ This crate provides typed access to audio devices, streams, and system-level aud
 ## Requirements
 
 - macOS (the crate is gated with `#[cfg(target_os = "macos")]`)
-- [`objc2-core-audio`](https://crates.io/crates/objc2-core-audio) for raw FFI bindings
+- [`objc2-core-audio`](https://crates.io/crates/objc2-core-audio), [`objc2-core-audio-types`](https://crates.io/crates/objc2-core-audio-types) and [`objc2-audio-toolbox`](https://crates.io/crates/objc2-audio-toolbox) for raw FFI bindings
 - [`core-foundation`](https://crates.io/crates/core-foundation) for `CFString` handling
-- macOS 14.2+ for process objects and taps. The optional `process-tap` feature adds [`objc2`](https://crates.io/crates/objc2) and [`objc2-foundation`](https://crates.io/crates/objc2-foundation) which won't compile on older verisons of macOS.
+- macOS 14.2+ for process objects and taps. The optional `process-tap` feature adds [`objc2`](https://crates.io/crates/objc2) and [`objc2-foundation`](https://crates.io/crates/objc2-foundation) which won't compile on older versions of macOS.
 
 ## Quick start
 
@@ -124,11 +125,11 @@ drop(listener);
 
 ### Tapping an app's audio
 
-Every process that has used CoreAudio has a process object. A tap has no IO of its own; `AggregateDevice::with_tap` wraps it in a private aggregate device, which is read with an ordinary IO proc.
+Every process that has used CoreAudio has a process object. A tap has no IO of its own; `AppTapAggregateDevice::with_tap` wraps it in a private aggregate device, which is read with an ordinary IO proc. `with_tap_public` makes the aggregate visible system-wide instead.
 
 ```rust
 use coreaudio::{
-    AggregateDevice, AudioObject, ProcessTap, Scope, System, TapMute,
+    AppTapAggregateDevice, AudioObject, ProcessTap, Scope, System, TapMute,
     PROCESS_BUNDLE_ID,
 };
 
@@ -141,7 +142,7 @@ let music: Vec<_> = system
 
 // Sound goes silent while this is read, and plays normally again once it isn't.
 let tap = ProcessTap::stereo_mixdown(&music, "Music tap", TapMute::MutedWhenTapped)?;
-let aggregate = AggregateDevice::with_tap("Music tap", "com.example.music-tap", tap.uid())?;
+let aggregate = AppTapAggregateDevice::with_tap("Music tap", "com.example.music-tap", tap.uid())?;
 
 let mut proc = aggregate.device().add_io_proc(Scope::Input, |buffers| {
     // ... Your code here
@@ -159,7 +160,23 @@ drop(tap);
 
 `stereo_mixdown` folds everything the processes play into two channels, which on a wide device comes out far quieter than they actually play. `ProcessTap::device_stream(&processes, device_uid, 0, name, mute)` instead taps what they play into one stream of a device, channel for channel at full level, with that stream's channel count and the device's rate.
 
-The aggregate is always private: only the creating process can see it, and macOS removes it if that process exits. Tapping needs the user's **System Audio Recording** permission (Privacy & Security). Without it a tap is still created but delivers silence, and a muting tap still mutes, so check the permission first.
+A private aggregate can only be seen by the creating process, and macOS removes it if that process exits. Tapping needs the user's **System Audio Recording** permission (Privacy & Security). Without it a tap is still created but delivers silence, and a muting tap still mutes, so check the permission first.
+
+### Combining devices into an aggregate
+
+`DeviceAggregateDevice::new` combines several devices into one, so their channels can be read and written through a single IO proc. The first device is the clock source and every other device is drift corrected to it. The aggregate gets a UID that is unique within your process, and is destroyed when it is dropped, so drop it before the devices it contains.
+
+```rust
+use coreaudio::{AudioObject, DeviceAggregateDevice, Scope, System};
+
+let system = AudioObject::<System>::default();
+let inputs = system.devices_with_scope(Scope::Input)?;
+
+// True to create a device private to the proccess, false for a public device
+let aggregate = DeviceAggregateDevice::new("My aggregate", inputs, true)?;
+
+let device = aggregate.device();
+```
 
 ### Properties that require an element or qualifier
 
@@ -260,7 +277,7 @@ use coreaudio::{AudioObject, System, Scope};
 let system = AudioObject::<System>::default();
 let device = system.current_device(Scope::Output)?;
 
-let mut io_proc = device.add_io_proc(|buffers| {
+let mut io_proc = device.add_io_proc(Scope::Output, |buffers| {
     for buffer in buffers {
         buffer.data.fill(0.0); // silence
     }
@@ -270,6 +287,22 @@ io_proc.play()?;
 // ... render audio ...
 io_proc.pause()?;
 io_proc.remove();
+```
+
+A proc is created stopped, so nothing is delivered until `play()` is called.
+
+Each buffer also carries the time stamps for its I/O cycle. A clock the device didn't fill in is `None`, so a zero is never mistaken for a real time:
+
+```rust
+let mut io_proc = device.add_io_proc(Scope::Input, |buffers| {
+    for buffer in buffers {
+        let now = buffer.get_now_time();
+
+        if let (Some(sample), Some(host)) = (now.sample_time(), now.host_time()) {
+            println!("{} channels, sample {sample}, host {host}", buffer.get_channels());
+        }
+    }
+})?;
 ```
 
 ### Available buffer sizes and sample rates

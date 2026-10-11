@@ -6,33 +6,23 @@
 
 use std::{thread, time::Duration};
 
-use coreaudio::{AudioObject, DEVICE_NAME, Device, Scope, System};
+use coreaudio::{AudioObject, DEVICE_NAME, Device, DeviceAggregateDevice, Scope, System};
 
 /// Aggregate device called `Test Subject`
-static TEST_DEVICE_NAME: &str = "BlackHole 2ch";
+static TEST_DEVICE_NAME: &str = "Test Subject";
 
 #[test]
 fn main() {
     let system = AudioObject::default();
+    let test = get_test_device(system, Scope::Output);
 
-    let test_output = get_test_device(system, Scope::Input);
+    let aggregate = DeviceAggregateDevice::new(
+        "Hello",
+        vec![test],
+        false,
+    ).unwrap();
 
-    let mut proc = test_output.add_io_proc(Scope::Input, |buffers| {
-        println!("Buffers: {}", buffers.len());
-        buffers.iter()
-        .for_each(|buffer| {
-            println!(
-                "Input: {:?}\nNow: {:?}\nOutput: {:?}",
-                buffer.get_input_time(),
-                buffer.get_now_time(),
-                buffer.get_output_time(),
-            )
-        });
-    }).unwrap();
-
-    proc.play().unwrap();
-    thread::sleep(Duration::from_secs(5));
-    proc.remove();
+    thread::sleep(Duration::from_secs(10));
 }
 
 /// Helper function to find a device
