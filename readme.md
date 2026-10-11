@@ -17,7 +17,7 @@ This crate provides typed access to audio devices, streams, and system-level aud
 - **Processes and taps** — List the processes using CoreAudio, and (with the `process-tap` feature) tap one app's audio before it's mixed, read through an aggregate device like any input.
 - **Channel layouts** — Read, write and listen to a device's speaker layout (`DEVICE_PREFERRED_CHANNEL_LAYOUT_OUTPUT`), expand predefined layouts with `layout_for_tag`, and get macOS's names for layouts and speakers.
 - **Structured error handling** — All CoreAudio `OSStatus` codes are mapped to a typed `ErrorKind` enum with human-readable four-character-code formatting.
-- **Format support** — Rich enums for audio format IDs (Linear PCM, AAC variants, ALAC, AC3, Opus, MP3, etc.), format flags, sample formats, transport types, terminal types, and sample resampling utilities.
+- **Format support** — Enums for audio format IDs (Linear PCM, AAC variants, ALAC, AC3, Opus, MP3, etc.), format flags, sample formats, transport types, and terminal types.
 
 ## Requirements
 
@@ -180,7 +180,7 @@ let device = aggregate.device();
 
 ### Properties that require an element or qualifier
 
-Some properties target a specific channel (element) or need a qualifier value before they can be used. Call `.for_element()`, `.with_qualifier()`, or both — in either order — to complete the property. Forgetting is a compile error.
+Some properties target a specific channel (element) or need a qualifier value before they can be used. Call `.for_element()`, `.with_qualifier()`, or both, in either order, to complete the property. Forgetting is a compile error.
 
 Channel names are usually per direction, so read them with `DEVICE_INPUT_ELEMENT_NAME` or `DEVICE_OUTPUT_ELEMENT_NAME`; the global `OBJECT_ELEMENT_NAME` often reads empty on the same device.
 
@@ -284,7 +284,7 @@ let mut io_proc = device.add_io_proc(Scope::Output, |buffers| {
 })?;
 
 io_proc.play()?;
-// ... render audio ...
+// ... Do something ...
 io_proc.pause()?;
 io_proc.remove();
 ```
@@ -503,7 +503,9 @@ The `FormatId` enum covers Linear PCM, AAC (Standard, HE, HEv2, LD, ELD, ELDv2, 
 
 ## Roadmap
 
-- Dedicated `AudioObject<Clock>`, `AudioObject<Box>`, and `AudioObject<Unit>` with unique methods
+- Dedicated `AudioObject<Clock>`, `AudioObject<Box>`, `AudioObject<Unit>`, and `AudioObject<Plugin>` with unique methods
+- Support for custom properties
+- Optional `usbmuxd` feature for enabling and disabling connected devices that communicate over usbmuxd
 - Add new wrappers and 'multi-properties' that combine multiple properties into one for things that shouldn't have to be seperate calls
 
 ## Disclaimer

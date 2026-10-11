@@ -12,8 +12,11 @@ use std::ptr::NonNull;
 use objc2_core_audio::AudioObjectPropertyAddress;
 
 // ---- Imports ------------
-use crate::{Device, Global, Process, Property, SampleRateRange, Stream, System, Tap, property::{Listenable, NeedBoth, NeedElement, NeedQualifier, NoExtra, Qualifier, ReadWrite}};
 use crate::encode::{bytes_u32, bytes_vec_u32};
+use crate::{
+    Device, Global, Process, Property, SampleRateRange, Stream, System, Tap,
+    property::{Listenable, NeedBoth, NeedElement, NeedQualifier, NoExtra, Qualifier, ReadWrite},
+};
 
 // ---- Traits ------------
 
@@ -27,7 +30,7 @@ use crate::encode::{bytes_u32, bytes_vec_u32};
 /// - `Tap` and `Global` properties work with `AudioObject<Tap>`
 #[diagnostic::on_unimplemented(
     message = "`{Self}` properties are incompatible with `AudioObject<{T}>`",
-    label = "Use this with `AudioObject<{Self}>` instead",
+    label = "Use this with `AudioObject<{Self}>` instead"
 )]
 pub trait ObjectCompatibleWith<T> {}
 
@@ -49,7 +52,7 @@ impl ObjectCompatibleWith<Tap> for Global {}
 /// `set_property` with a `ReadOnly` property produces a compile error
 #[diagnostic::on_unimplemented(
     message = "this property is read-only",
-    label = "`set_property()` requires properties with `ReadWrite`",
+    label = "`set_property()` requires properties with `ReadWrite`"
 )]
 pub trait Writeable {}
 
@@ -61,7 +64,7 @@ impl Writeable for ReadWrite {}
 /// `add_listener` with a `Silent` property produces a compile error
 #[diagnostic::on_unimplemented(
     message = "this property does not support listeners",
-    label = "`add_listener()` requires propertes with `Listenable`",
+    label = "`add_listener()` requires propertes with `Listenable`"
 )]
 pub trait CanListen {}
 
@@ -75,7 +78,7 @@ impl CanListen for Listenable {}
 /// completed via `.for_element()` or `.with_qualifier()`
 #[diagnostic::on_unimplemented(
     message = "this property requires additional data before it can be used",
-    label = "check for `.with_qualifier()` or `.for_element()` methods on this property",
+    label = "check for `.with_qualifier()` or `.for_element()` methods on this property"
 )]
 pub trait HasAllData {}
 
@@ -88,7 +91,7 @@ impl HasAllData for NoExtra {}
 /// qualifiers (`u32`, `Vec<u32>`, and `String`)
 #[diagnostic::on_unimplemented(
     message = "incorrect qualifier data type",
-    label = "check the `.with_qualifier()` method for expected type",
+    label = "check the `.with_qualifier()` method for expected type"
 )]
 pub trait IntoQualifierBytes {
     /// Serialises the qualifier value into a byte vector suitable for passing
@@ -139,9 +142,7 @@ impl IntoQualifierBytes for String {
 /// requirement
 /// The resulting property may be fully specified (`NoExtra`) or may still need
 /// an element (`NeedElement`)
-#[diagnostic::on_unimplemented(
-    message = "this property does not accept qualifier data",
-)]
+#[diagnostic::on_unimplemented(message = "this property does not accept qualifier data")]
 pub trait MissingQualifier<T> {
     /// The property type produced after the qualifier is attached
     type Output;
@@ -159,12 +160,8 @@ impl<V, D, A, L, T> MissingQualifier<T> for Property<V, D, A, L, NeedQualifier<T
     where
         T: IntoQualifierBytes,
     {
-        let mut new: Property<V, D, A, L, NoExtra> = Property::new(
-            self.address,
-            self.size,
-            self.read,
-            self.encode,
-        );
+        let mut new: Property<V, D, A, L, NoExtra> =
+            Property::new(self.address, self.size, self.read, self.encode);
 
         new.qualifier = Some(qualifier.into_qualifier());
         new
@@ -178,12 +175,8 @@ impl<V, D, A, L, T> MissingQualifier<T> for Property<V, D, A, L, NeedBoth<T>> {
     where
         T: IntoQualifierBytes,
     {
-        let mut new: Property<V, D, A, L, NeedElement> = Property::new(
-            self.address,
-            self.size,
-            self.read,
-            self.encode,
-        );
+        let mut new: Property<V, D, A, L, NeedElement> =
+            Property::new(self.address, self.size, self.read, self.encode);
 
         new.qualifier = Some(qualifier.into_qualifier());
         new
@@ -195,9 +188,7 @@ impl<V, D, A, L, T> MissingQualifier<T> for Property<V, D, A, L, NeedBoth<T>> {
 /// Calling `.for_element(n)` on a `NeedElement` or `NeedBoth<T>` property
 /// writes `n` into `mElement` of the property address, transitioning the `E`
 /// type parameter to remove the element requirement
-#[diagnostic::on_unimplemented(
-    message = "this property does not accept element data",
-)]
+#[diagnostic::on_unimplemented(message = "this property does not accept element data")]
 pub trait MissingElement {
     /// The property type produced after the element is set
     type Output;
@@ -211,12 +202,8 @@ impl<V, D, A, L> MissingElement for Property<V, D, A, L, NeedElement> {
     type Output = Property<V, D, A, L, NoExtra>;
 
     fn for_element(self, element: u32) -> Self::Output {
-        let mut new: Property<V, D, A, L, NoExtra> = Property::new(
-            self.address,
-            self.size,
-            self.read,
-            self.encode,
-        );
+        let mut new: Property<V, D, A, L, NoExtra> =
+            Property::new(self.address, self.size, self.read, self.encode);
         new.address.mElement = element;
 
         new.qualifier = self.qualifier;
@@ -228,12 +215,8 @@ impl<V, D, A, L, T> MissingElement for Property<V, D, A, L, NeedBoth<T>> {
     type Output = Property<V, D, A, L, NeedQualifier<T>>;
 
     fn for_element(self, element: u32) -> Self::Output {
-        let mut new: Property<V, D, A, L, NeedQualifier<T>> = Property::new(
-            self.address,
-            self.size,
-            self.read,
-            self.encode,
-        );
+        let mut new: Property<V, D, A, L, NeedQualifier<T>> =
+            Property::new(self.address, self.size, self.read, self.encode);
         new.address.mElement = element;
 
         new.qualifier = self.qualifier;
@@ -249,10 +232,7 @@ pub trait ValidSampleRates {
 
 impl ValidSampleRates for Vec<SampleRateRange> {
     fn valid_rates(&self) -> Vec<f64> {
-        self.iter()
-        .map(|range| {
-            range.get_min()
-        }).collect()
+        self.iter().map(|range| range.get_min()).collect()
     }
 }
 

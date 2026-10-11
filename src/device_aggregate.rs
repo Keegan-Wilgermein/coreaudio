@@ -9,15 +9,26 @@
 #![allow(unsafe_code)]
 
 // ---- Imports ------------
-use crate::{AudioObject, CoreAudioError, Device, ErrorKind, errors::OSStatusCheck, property::DEVICE_UID};
-use std::{ffi::CStr, sync::atomic::{AtomicU32, Ordering}};
-use core_foundation::{array::CFArray, base::{CFType, TCFType}, boolean::CFBoolean, dictionary::CFDictionary, string::CFString};
+use crate::{
+    AudioObject, CoreAudioError, Device, ErrorKind, errors::OSStatusCheck, property::DEVICE_UID,
+};
+use core_foundation::{
+    array::CFArray,
+    base::{CFType, TCFType},
+    boolean::CFBoolean,
+    dictionary::CFDictionary,
+    string::CFString,
+};
 use objc2_core_audio::{
     AudioHardwareCreateAggregateDevice, AudioHardwareDestroyAggregateDevice, AudioObjectID,
     kAudioAggregateDeviceIsPrivateKey, kAudioAggregateDeviceIsStackedKey,
     kAudioAggregateDeviceMainSubDeviceKey, kAudioAggregateDeviceNameKey,
     kAudioAggregateDeviceSubDeviceListKey, kAudioAggregateDeviceUIDKey,
     kAudioSubDeviceDriftCompensationKey, kAudioSubDeviceUIDKey,
+};
+use std::{
+    ffi::CStr,
+    sync::atomic::{AtomicU32, Ordering},
 };
 
 // ---- Constants ------------
@@ -31,7 +42,7 @@ static NEXT_UID: AtomicU32 = AtomicU32::new(0);
 ///
 /// A private aggregate is only visible to the process that created it and
 /// macOS destroys it if the process exits without dropping it
-/// 
+///
 /// A public aggregate is visible system-wide while it exists
 pub struct DeviceAggregateDevice {
     /// The aggregate as a device
@@ -65,10 +76,13 @@ impl DeviceAggregateDevice {
             AudioHardwareCreateAggregateDevice(
                 &*description.as_concrete_TypeRef().cast(),
                 (&mut id).into(),
-            ).check()?;
+            )
+            .check()?;
         }
 
-        Ok(Self { device: AudioObject::<Device>::from(id) })
+        Ok(Self {
+            device: AudioObject::<Device>::from(id),
+        })
     }
 
     /// The aggregate as a device, to read properties from and add an IO proc to
@@ -77,8 +91,6 @@ impl DeviceAggregateDevice {
     pub fn device(&self) -> AudioObject<Device> {
         self.device
     }
-
-
 }
 
 impl Drop for DeviceAggregateDevice {
@@ -129,8 +141,14 @@ fn aggregate_description(
             };
 
             CFDictionary::from_CFType_pairs(&[
-                (key(kAudioSubDeviceUIDKey), CFString::new(device_uid).as_CFType()),
-                (key(kAudioSubDeviceDriftCompensationKey), drift_corrected.as_CFType()),
+                (
+                    key(kAudioSubDeviceUIDKey),
+                    CFString::new(device_uid).as_CFType(),
+                ),
+                (
+                    key(kAudioSubDeviceDriftCompensationKey),
+                    drift_corrected.as_CFType(),
+                ),
             ])
         })
         .collect();
@@ -142,11 +160,26 @@ fn aggregate_description(
     };
 
     Some(CFDictionary::from_CFType_pairs(&[
-        (key(kAudioAggregateDeviceNameKey), CFString::new(name).as_CFType()),
-        (key(kAudioAggregateDeviceUIDKey), CFString::new(uid).as_CFType()),
-        (key(kAudioAggregateDeviceMainSubDeviceKey), CFString::new(main).as_CFType()),
+        (
+            key(kAudioAggregateDeviceNameKey),
+            CFString::new(name).as_CFType(),
+        ),
+        (
+            key(kAudioAggregateDeviceUIDKey),
+            CFString::new(uid).as_CFType(),
+        ),
+        (
+            key(kAudioAggregateDeviceMainSubDeviceKey),
+            CFString::new(main).as_CFType(),
+        ),
         (key(kAudioAggregateDeviceIsPrivateKey), private),
-        (key(kAudioAggregateDeviceIsStackedKey), CFBoolean::false_value().as_CFType()),
-        (key(kAudioAggregateDeviceSubDeviceListKey), CFArray::from_CFTypes(&sub_devices).as_CFType()),
+        (
+            key(kAudioAggregateDeviceIsStackedKey),
+            CFBoolean::false_value().as_CFType(),
+        ),
+        (
+            key(kAudioAggregateDeviceSubDeviceListKey),
+            CFArray::from_CFTypes(&sub_devices).as_CFType(),
+        ),
     ]))
 }

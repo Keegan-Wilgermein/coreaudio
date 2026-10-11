@@ -7,7 +7,9 @@
 //! The accessors on [`Time`] check the flags for you and return `None` for
 //! any clock that isn't valid
 
-use objc2_core_audio_types::{AudioTimeStamp, AudioTimeStampFlags, SMPTETime as RawSMPTETime, SMPTETimeFlags, SMPTETimeType};
+use objc2_core_audio_types::{
+    AudioTimeStamp, AudioTimeStampFlags, SMPTETime as RawSMPTETime, SMPTETimeFlags, SMPTETimeType,
+};
 
 // ---- Structs ------------
 
@@ -60,7 +62,9 @@ impl Time {
 
     /// The word clock time, if reported
     pub fn world_clock_time(&self) -> Option<u64> {
-        self.flags.word_clock_time_valid.then_some(self.world_clock_time)
+        self.flags
+            .word_clock_time_valid
+            .then_some(self.world_clock_time)
     }
 
     /// The SMPTE time, if reported

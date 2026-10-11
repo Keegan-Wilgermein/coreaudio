@@ -7,18 +7,25 @@
 #![allow(unsafe_code)]
 
 // ---- Imports ------------
-use crate::{errors::{CoreAudioError, OSStatusCheck}, object::{AudioObject, Device}};
-use std::ffi::CStr;
+use crate::{
+    errors::{CoreAudioError, OSStatusCheck},
+    object::{AudioObject, Device},
+};
 use core_foundation::{
-    array::CFArray, base::{CFType, TCFType}, boolean::CFBoolean, dictionary::CFDictionary, string::CFString,
+    array::CFArray,
+    base::{CFType, TCFType},
+    boolean::CFBoolean,
+    dictionary::CFDictionary,
+    string::CFString,
 };
 use objc2_core_audio::{
     AudioHardwareCreateAggregateDevice, AudioHardwareDestroyAggregateDevice, AudioObjectID,
     kAudioAggregateDeviceIsPrivateKey, kAudioAggregateDeviceIsStackedKey,
     kAudioAggregateDeviceNameKey, kAudioAggregateDeviceTapAutoStartKey,
-    kAudioAggregateDeviceTapListKey, kAudioAggregateDeviceUIDKey,
-    kAudioSubTapDriftCompensationKey, kAudioSubTapUIDKey,
+    kAudioAggregateDeviceTapListKey, kAudioAggregateDeviceUIDKey, kAudioSubTapDriftCompensationKey,
+    kAudioSubTapUIDKey,
 };
+use std::ffi::CStr;
 
 // ---- Structs ------------
 
@@ -53,7 +60,7 @@ impl AppTapAggregateDevice {
     }
 
     /// The aggregate as a device, to read properties from and add an IO proc to
-    /// 
+    ///
     /// This is the aggregate itself, not any underlying
     /// devices that it contains as an `AppTapAggregateDevice`
     /// cannot contain any devices
@@ -71,27 +78,28 @@ impl AppTapAggregateDevice {
     ) -> Result<Self, CoreAudioError> {
         let tap = CFDictionary::from_CFType_pairs(&[
             (key(kAudioSubTapUIDKey), CFString::new(tap_uid).as_CFType()),
-            (key(kAudioSubTapDriftCompensationKey), CFBoolean::true_value().as_CFType()),
+            (
+                key(kAudioSubTapDriftCompensationKey),
+                CFBoolean::true_value().as_CFType(),
+            ),
         ]);
 
         let taps = CFArray::from_CFTypes(&[tap]);
 
-        let description = tap_description(
-            name,
-            uid,
-            taps,
-            private,
-        );
+        let description = tap_description(name, uid, taps, private);
 
         let mut id: AudioObjectID = 0;
         unsafe {
             AudioHardwareCreateAggregateDevice(
                 &*description.as_concrete_TypeRef().cast(),
                 (&mut id).into(),
-            ).check()?;
+            )
+            .check()?;
         }
 
-        Ok(Self { device: AudioObject::<Device>::from(id) })
+        Ok(Self {
+            device: AudioObject::<Device>::from(id),
+        })
     }
 }
 
@@ -125,11 +133,23 @@ fn tap_description(
     };
 
     CFDictionary::from_CFType_pairs(&[
-        (key(kAudioAggregateDeviceNameKey), CFString::new(name).as_CFType()),
-        (key(kAudioAggregateDeviceUIDKey), CFString::new(uid).as_CFType()),
+        (
+            key(kAudioAggregateDeviceNameKey),
+            CFString::new(name).as_CFType(),
+        ),
+        (
+            key(kAudioAggregateDeviceUIDKey),
+            CFString::new(uid).as_CFType(),
+        ),
         (key(kAudioAggregateDeviceIsPrivateKey), private_key),
-        (key(kAudioAggregateDeviceIsStackedKey), CFBoolean::false_value().as_CFType()),
-        (key(kAudioAggregateDeviceTapAutoStartKey), CFBoolean::true_value().as_CFType()),
+        (
+            key(kAudioAggregateDeviceIsStackedKey),
+            CFBoolean::false_value().as_CFType(),
+        ),
+        (
+            key(kAudioAggregateDeviceTapAutoStartKey),
+            CFBoolean::true_value().as_CFType(),
+        ),
         (key(kAudioAggregateDeviceTapListKey), taps.as_CFType()),
     ])
 }

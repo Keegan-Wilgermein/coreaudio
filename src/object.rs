@@ -10,9 +10,22 @@
 #![allow(unsafe_code)]
 
 // ---- Imports ------------
-use crate::{data_types::{PropertySize, Scope}, errors::{CoreAudioError, OSStatusCheck}, io_proc::{AudioBuffer, IOProc}, listener::{CallbackListener, PropertyListener}, property::{DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Property, SYSTEM_DEFAULT_INPUT, SYSTEM_DEFAULT_OUTPUT, SYSTEM_DEVICES, SYSTEM_PROCESS_OBJECT_LIST}, traits::{CanListen, HasAllData, IntoNonNull, PtrIntoNonNull, ObjectCompatibleWith, Writeable}};
-use std::{ffi::c_void, marker::PhantomData, ptr::{null}};
-use objc2_core_audio::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectSetPropertyData, kAudioObjectSystemObject};
+use crate::{
+    data_types::{PropertySize, Scope},
+    errors::{CoreAudioError, OSStatusCheck},
+    io_proc::{AudioBuffer, IOProc},
+    listener::{CallbackListener, PropertyListener},
+    property::{
+        DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Property, SYSTEM_DEFAULT_INPUT,
+        SYSTEM_DEFAULT_OUTPUT, SYSTEM_DEVICES, SYSTEM_PROCESS_OBJECT_LIST,
+    },
+    traits::{CanListen, HasAllData, IntoNonNull, ObjectCompatibleWith, PtrIntoNonNull, Writeable},
+};
+use objc2_core_audio::{
+    AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID,
+    AudioObjectSetPropertyData, kAudioObjectSystemObject,
+};
+use std::{ffi::c_void, marker::PhantomData, ptr::null};
 
 // ---- Structs ------------
 
@@ -20,6 +33,7 @@ use objc2_core_audio::{AudioObjectGetPropertyData, AudioObjectGetPropertyDataSiz
 ///
 /// `Global` properties are defined on the base `AudioObject` class in CoreAudio
 /// and apply equally to system objects, devices, and streams
+///
 /// A `Property<_, Global, _, _, _>` constant can be used with any `AudioObject`
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Global;
@@ -27,10 +41,23 @@ pub struct Global;
 /// Marker for [`AudioObject`] granting access to system-wide HAL properties
 ///
 /// Construct the system object with `AudioObject::<System>::default()`
+///
 /// It exposes device enumeration, default device selection, and global HAL
 /// state
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct System;
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Plugin;
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Box;
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Clock;
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Unit;
 
 /// Marker for [`AudioObject`] granting access to device-specific properties
 ///
@@ -63,8 +90,9 @@ pub struct Tap;
 /// A CoreAudio HAL object identified by an `AudioObjectID`
 ///
 /// The type parameter `T` is one of [`System`], [`Device`], [`Stream`],
-/// and determines which `impl` blocks — and therefore which methods
-/// and properties — are available on this value
+/// [`Process`], [`Tap`], [`Plugin`], [`Box`], [`Clock`], or [`Unit`]
+/// and determines which `impl` blocks, and therefore which methods
+/// and properties, are available on this value
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AudioObject<T> {
     /// Raw CoreAudio object identifier
@@ -175,7 +203,7 @@ impl<C> AudioObject<C> {
     ///
     /// The property constant must be
     /// [`Listenable`](crate::property::Listenable)
-    /// 
+    ///
     /// Drop the returned [`PropertyListener`] to
     /// unregister
     pub fn add_listener<V, D, A, L, E>(
@@ -191,14 +219,14 @@ impl<C> AudioObject<C> {
     }
 
     /// Registers a listener for a property scoped to `C` compatible AudioObjects
-    /// 
+    ///
     /// Unlike a normal listener, it calls `sink` on each change
     ///
     /// `sink` runs on CoreAudio's notification thread with the new value, or
     /// the error reading it
     /// The same property rules apply as for
     /// [`add_listener`](Self::add_listener)
-    /// 
+    ///
     /// Drop the returned [`CallbackListener`] to unregister
     pub fn add_listener_with<V, D, A, L, E, S>(
         &self,
@@ -211,23 +239,29 @@ impl<C> AudioObject<C> {
         E: HasAllData,
         S: Fn(Result<V, CoreAudioError>) + Send + Sync + 'static,
     {
-        CallbackListener::try_new(self.id, property.size, property.address, property.read, sink)
+        CallbackListener::try_new(
+            self.id,
+            property.size,
+            property.address,
+            property.read,
+            sink,
+        )
     }
 
     /// Forcefully sets the property's value
-    /// 
+    ///
     /// Use this if you have to interact with a
     /// device that doesn't follow the normal conventions
-    /// 
+    ///
     /// Unlike the normal property setter, this version
     /// will ignore whether the property is
     /// - Writable
     /// - Has an element
     /// - Has qualifier data
     /// - Is being called on the correct kind of device
-    /// 
+    ///
     /// This leaves it up to the caller to confirm all of these
-    /// 
+    ///
     /// The function will still return a `CoreAudioError` if it
     /// fails for any reason instead of crashing,
     /// but it will not be able to say why
@@ -285,59 +319,64 @@ impl<C> AudioObject<C> {
     where
         S: Fn(Result<V, CoreAudioError>) + Send + Sync + 'static,
     {
-        CallbackListener::try_new(self.id, property.size, property.address, property.read, sink)
+        CallbackListener::try_new(
+            self.id,
+            property.size,
+            property.address,
+            property.read,
+            sink,
+        )
     }
 }
 
 // ---- Implementation on `AudioObject<System>` --------------------------
 impl AudioObject<System> {
     /// Returns all audio devices currently known to the HAL, regardless of scope
-    pub fn devices(&self) ->
-    Result<Vec<AudioObject<Device>>, CoreAudioError> {
-        Ok(
-            get_property_internal(self.id, SYSTEM_DEVICES)?
+    pub fn devices(&self) -> Result<Vec<AudioObject<Device>>, CoreAudioError> {
+        Ok(get_property_internal(self.id, SYSTEM_DEVICES)?
             .iter()
-            .map(|id| {
-                AudioObject::<Device>::from(*id)
-            }).collect()
-        )
+            .map(|id| AudioObject::<Device>::from(*id))
+            .collect())
     }
 
     /// Returns all audio devices that have at least one stream in the given scope
     ///
     /// Devices with no streams in `scope` (e.g. an output-only device queried
     /// with `Scope::Input`) are excluded from the result
-    pub fn devices_with_scope(&self, scope: Scope) ->
-    Result<Vec<AudioObject<Device>>, CoreAudioError> {
+    pub fn devices_with_scope(
+        &self,
+        scope: Scope,
+    ) -> Result<Vec<AudioObject<Device>>, CoreAudioError> {
         let all_devices = self.devices()?;
 
-        Ok(all_devices.into_iter().filter(|device| {
-            let streams = match scope {
-                Scope::Input => device.get_property(DEVICE_INPUT_STREAMS),
-                Scope::Output => device.get_property(DEVICE_OUTPUT_STREAMS),
-            };
+        Ok(all_devices
+            .into_iter()
+            .filter(|device| {
+                let streams = match scope {
+                    Scope::Input => device.get_property(DEVICE_INPUT_STREAMS),
+                    Scope::Output => device.get_property(DEVICE_OUTPUT_STREAMS),
+                };
 
-            streams.map(|s: Vec<AudioObjectID>| !s.is_empty()).unwrap_or(false)
-        }).collect())
+                streams
+                    .map(|s: Vec<AudioObjectID>| !s.is_empty())
+                    .unwrap_or(false)
+            })
+            .collect())
     }
 
     /// Returns every process object the HAL knows: each process that has used
     /// CoreAudio (macOS 14.2+)
     /// Listen to [`crate::SYSTEM_PROCESS_OBJECT_LIST`] to hear processes come
     /// and go
-    pub fn processes(&self) ->
-    Result<Vec<AudioObject<Process>>, CoreAudioError> {
-        Ok(
-            get_property_internal(self.id, SYSTEM_PROCESS_OBJECT_LIST)?
+    pub fn processes(&self) -> Result<Vec<AudioObject<Process>>, CoreAudioError> {
+        Ok(get_property_internal(self.id, SYSTEM_PROCESS_OBJECT_LIST)?
             .iter()
             .map(|id| AudioObject::<Process>::from(*id))
-            .collect()
-        )
+            .collect())
     }
 
     /// Returns the device currently selected as the system default for `scope`
-    pub fn current_device(&self, scope: Scope) ->
-    Result<AudioObject<Device>, CoreAudioError> {
+    pub fn current_device(&self, scope: Scope) -> Result<AudioObject<Device>, CoreAudioError> {
         let id = match scope {
             Scope::Input => self.get_property(SYSTEM_DEFAULT_INPUT)?,
             Scope::Output => self.get_property(SYSTEM_DEFAULT_OUTPUT)?,
@@ -352,34 +391,33 @@ impl AudioObject<Device> {
     /// Returns all streams on this device, regardless of scope
     ///
     /// Input and output streams are combined into a single list
-    pub fn streams(&self) ->
-    Result<Vec<AudioObject<Stream>>, CoreAudioError> {
+    pub fn streams(&self) -> Result<Vec<AudioObject<Stream>>, CoreAudioError> {
         let mut streams = self.get_property(DEVICE_INPUT_STREAMS)?;
         let output_streams = self.get_property(DEVICE_OUTPUT_STREAMS)?;
         output_streams.iter().for_each(|stream| {
             streams.push(*stream);
         });
 
-        Ok(
-            streams.iter().map(|stream| {
-                AudioObject::<Stream>::from(*stream)
-            }).collect()
-        )
+        Ok(streams
+            .iter()
+            .map(|stream| AudioObject::<Stream>::from(*stream))
+            .collect())
     }
 
     /// Returns all streams on this device in the given scope
-    pub fn streams_with_scope(&self, scope: Scope) ->
-    Result<Vec<AudioObject<Stream>>, CoreAudioError> {
+    pub fn streams_with_scope(
+        &self,
+        scope: Scope,
+    ) -> Result<Vec<AudioObject<Stream>>, CoreAudioError> {
         let streams = match scope {
             Scope::Input => self.get_property(DEVICE_INPUT_STREAMS)?,
             Scope::Output => self.get_property(DEVICE_OUTPUT_STREAMS)?,
         };
 
-        Ok(
-            streams.iter().map(|stream| {
-                AudioObject::<Stream>::from(*stream)
-            }).collect()
-        )
+        Ok(streams
+            .iter()
+            .map(|stream| AudioObject::<Stream>::from(*stream))
+            .collect())
     }
 
     /// Registers an audio render callback on this device and returns the
@@ -387,11 +425,7 @@ impl AudioObject<Device> {
     ///
     /// The callback receives a slice of [`AudioBuffer`]s once per I/O cycle
     /// Call [`IOProc::play`] to start audio delivery
-    pub fn add_io_proc<F>(
-        &self,
-        scope: Scope,
-        callback: F,
-    ) -> Result<IOProc, CoreAudioError>
+    pub fn add_io_proc<F>(&self, scope: Scope, callback: F) -> Result<IOProc, CoreAudioError>
     where
         F: FnMut(&mut [AudioBuffer]) + Send + 'static,
     {
@@ -418,7 +452,7 @@ impl AudioObject<Tap> {}
 pub(crate) fn get_property_internal<V, D, A, L, E>(
     id: AudioObjectID,
     mut property: Property<V, D, A, L, E>,
- ) -> Result<V, CoreAudioError> {
+) -> Result<V, CoreAudioError> {
     let (q_len, q_data) = get_q_data_len(&property);
     let mut size = get_property_data_size_internal(id, &property)?;
 
@@ -431,11 +465,12 @@ pub(crate) fn get_property_internal<V, D, A, L, E>(
             q_data,
             size.non_null(),
             buffer.as_mut_ptr().cast::<c_void>().non_null(),
-        ).check()?;
+        )
+        .check()?;
 
         (property.read)(&buffer)
     }
- }
+}
 
 /// Writes a property value to the object identified by `id`
 ///
@@ -460,7 +495,8 @@ pub(crate) fn set_property_internal<V, D, A, L, E>(
             q_data,
             size,
             (out_data.bytes.as_ptr() as *const c_void).non_null(),
-        ).check()?;
+        )
+        .check()?;
 
         Ok(())
     }
@@ -468,17 +504,10 @@ pub(crate) fn set_property_internal<V, D, A, L, E>(
 
 /// Gets the q_len and q_data as a tuple
 /// of ( q_len, q_data )
-fn get_q_data_len<V, D, A, L, E>(
-    property: &Property<V, D, A, L, E>,
-) -> (u32, *const c_void) {
-    property.qualifier
-        .as_ref()
-        .map_or(
-            (0, null()),
-            |q| {
-                (q.bytes.len() as u32, q.bytes.as_ptr() as *const c_void)
-            }
-        )
+fn get_q_data_len<V, D, A, L, E>(property: &Property<V, D, A, L, E>) -> (u32, *const c_void) {
+    property.qualifier.as_ref().map_or((0, null()), |q| {
+        (q.bytes.len() as u32, q.bytes.as_ptr() as *const c_void)
+    })
 }
 
 /// Gets the size of the property data for a device
@@ -490,20 +519,13 @@ fn get_property_data_size_internal<V, D, A, L, E>(
 
     match property.size {
         PropertySize::Known(size) => Ok(size),
-        PropertySize::Unknown => {
-            unsafe {
-                let mut address = property.address;
-                let mut size = 0u32;
-                AudioObjectGetPropertyDataSize(
-                    id,
-                    address.non_null(),
-                    q_len,
-                    q_data,
-                    size.non_null(),
-                ).check()?;
+        PropertySize::Unknown => unsafe {
+            let mut address = property.address;
+            let mut size = 0u32;
+            AudioObjectGetPropertyDataSize(id, address.non_null(), q_len, q_data, size.non_null())
+                .check()?;
 
-                Ok(size)
-            }
-        }
+            Ok(size)
+        },
     }
 }

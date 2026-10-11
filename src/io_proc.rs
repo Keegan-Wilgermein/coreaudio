@@ -9,12 +9,19 @@
 #![allow(unsafe_code)]
 
 // ---- Imports ------------
-use std::{ffi::c_void};
-use objc2_core_audio_types::{AudioBufferList, AudioTimeStamp};
-use objc2_core_audio::{AudioDeviceCreateIOProcID, AudioDeviceDestroyIOProcID, AudioDeviceID, AudioDeviceIOProcID, AudioDeviceStart, AudioDeviceStop};
 use crate::Time;
 use crate::errors::OSStatus;
-use crate::{Scope, errors::{CoreAudioError, ErrorKind, OSStatusCheck}, object::{AudioObject, Device}};
+use crate::{
+    Scope,
+    errors::{CoreAudioError, ErrorKind, OSStatusCheck},
+    object::{AudioObject, Device},
+};
+use objc2_core_audio::{
+    AudioDeviceCreateIOProcID, AudioDeviceDestroyIOProcID, AudioDeviceID, AudioDeviceIOProcID,
+    AudioDeviceStart, AudioDeviceStop,
+};
+use objc2_core_audio_types::{AudioBufferList, AudioTimeStamp};
+use std::ffi::c_void;
 
 // ---- Structs ------------
 
@@ -124,10 +131,7 @@ impl Drop for IOProc {
     fn drop(&mut self) {
         unsafe {
             AudioDeviceStop(self.id, self.proc_id);
-            AudioDeviceDestroyIOProcID(
-                self.id,
-                self.proc_id,
-            );
+            AudioDeviceDestroyIOProcID(self.id, self.proc_id);
             (self.free_client_data)(self.client_data);
         }
     }
@@ -146,19 +150,19 @@ impl IOProc {
     ///
     /// The device is immediately stopped after creation so that `play` must be
     /// called explicitly to begin audio delivery
-    /// 
+    ///
     /// The callbacks list of `AudioBuffer` is
     /// represented depending on whether the data
     /// is interleaved or not
-    /// 
+    ///
     /// ## Interleaved audio
-    /// 
+    ///
     /// If the data is interleaved then the list will have length 1
     /// and the channels will be represented as `[1, 2, 3, ... , 1, 2]`
     /// in the `AudioBuffer.data` field
-    /// 
+    ///
     /// ## Non-Interleaved audio
-    /// 
+    ///
     /// If the data is non interleaved then the list will have a length
     /// equal to the amount of channels and the field `AudioBuffer.data`
     /// will have length 1, containing only the samples for that channel
@@ -188,7 +192,8 @@ impl IOProc {
                 Some(std::mem::transmute::<RawIOProc, _>(io_callback::<F>)),
                 data_ptr,
                 (&mut proc_id).into(),
-            ).check()
+            )
+            .check()
         };
 
         if let Err(error) = created {
@@ -257,7 +262,15 @@ impl IOProc {
 // ---- Functions ------------
 
 /// [`io_callback`]'s signature with raw pointers, since the buffer lists may be null
-type RawIOProc = extern "C-unwind" fn(AudioDeviceID, *const AudioTimeStamp, *const AudioBufferList, *const AudioTimeStamp, *mut AudioBufferList, *const AudioTimeStamp, *mut c_void) -> OSStatus;
+type RawIOProc = extern "C-unwind" fn(
+    AudioDeviceID,
+    *const AudioTimeStamp,
+    *const AudioBufferList,
+    *const AudioTimeStamp,
+    *mut AudioBufferList,
+    *const AudioTimeStamp,
+    *mut c_void,
+) -> OSStatus;
 
 /// Reads a time stamp CoreAudio passed to the callback
 ///
@@ -323,7 +336,7 @@ where
                         std::ptr::NonNull::<f32>::dangling().as_ptr(),
                         0,
                     ),
-                    0
+                    0,
                 )
             } else {
                 (
@@ -331,7 +344,7 @@ where
                         buf.mData as *mut f32,
                         buf.mDataByteSize as usize / size_of::<f32>(),
                     ),
-                    buf.mDataByteSize / (buf.mNumberChannels * size_of::<f32>() as u32)
+                    buf.mDataByteSize / (buf.mNumberChannels * size_of::<f32>() as u32),
                 )
             };
 

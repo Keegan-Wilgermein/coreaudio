@@ -2,9 +2,16 @@
 
 #![allow(unsafe_code)]
 
-use objc2_core_audio_types::{AudioStreamBasicDescription, AudioValueRange};
+use crate::{
+    Scope,
+    data_types::{
+        BufferFrameSizeRange, ChannelLayout, ChannelPair, DBRange, HogMode, PowerHint,
+        SampleRateRange, StreamDescription, StreamRangedDescription, TerminalType, TransportType,
+    },
+    property::Qualifier,
+};
 use objc2_core_audio::{AudioObjectID, AudioStreamRangedDescription};
-use crate::{Scope, data_types::{BufferFrameSizeRange, ChannelLayout, ChannelPair, DBRange, HogMode, PowerHint, SampleRateRange, StreamDescription, StreamRangedDescription, TerminalType, TransportType}, property::Qualifier};
+use objc2_core_audio_types::{AudioStreamBasicDescription, AudioValueRange};
 
 /// Serialises a [`PowerHint`] as a native-endian `u32`
 pub(crate) fn encode_power_hint(value: PowerHint) -> Qualifier {
@@ -64,19 +71,31 @@ pub(crate) fn encode_transport_type(value: TransportType) -> Qualifier {
 
 /// Serialises a packed array of [`SampleRateRange`] as `AudioValueRange`s
 pub(crate) fn encode_vec_sample_rate_range(value: Vec<SampleRateRange>) -> Qualifier {
-    Qualifier::from_bytes(value.into_iter().flat_map(|range| value_range_bytes(range.into())).collect())
+    Qualifier::from_bytes(
+        value
+            .into_iter()
+            .flat_map(|range| value_range_bytes(range.into()))
+            .collect(),
+    )
 }
 
 /// Serialises a packed array of [`StreamRangedDescription`] as
 /// `AudioStreamRangedDescription`s
-pub(crate) fn encode_vec_stream_ranged_description(value: Vec<StreamRangedDescription>) -> Qualifier {
+pub(crate) fn encode_vec_stream_ranged_description(
+    value: Vec<StreamRangedDescription>,
+) -> Qualifier {
     Qualifier::from_bytes(
-        value.into_iter().flat_map(|description| {
-            let raw: AudioStreamRangedDescription = description.into();
-            let mut bytes = vec![0u8; size_of::<AudioStreamRangedDescription>()];
-            unsafe { std::ptr::write(bytes.as_mut_ptr() as *mut AudioStreamRangedDescription, raw) };
-            bytes
-        }).collect()
+        value
+            .into_iter()
+            .flat_map(|description| {
+                let raw: AudioStreamRangedDescription = description.into();
+                let mut bytes = vec![0u8; size_of::<AudioStreamRangedDescription>()];
+                unsafe {
+                    std::ptr::write(bytes.as_mut_ptr() as *mut AudioStreamRangedDescription, raw)
+                };
+                bytes
+            })
+            .collect(),
     )
 }
 

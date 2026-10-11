@@ -2,8 +2,24 @@
 
 #![allow(deprecated)] // `kAudioDeviceTransportTypeContinuityCapture` is still reported by older systems
 
-use objc2_core_audio::{kAudioDeviceTransportTypeAVB, kAudioDeviceTransportTypeAggregate, kAudioDeviceTransportTypeAirPlay, kAudioDeviceTransportTypeAutoAggregate, kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE, kAudioDeviceTransportTypeBuiltIn, kAudioDeviceTransportTypeContinuityCapture, kAudioDeviceTransportTypeContinuityCaptureWired, kAudioDeviceTransportTypeContinuityCaptureWireless, kAudioDeviceTransportTypeDisplayPort, kAudioDeviceTransportTypeFireWire, kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypePCI, kAudioDeviceTransportTypeThunderbolt, kAudioDeviceTransportTypeUSB, kAudioDeviceTransportTypeVirtual, kAudioStreamTerminalTypeDigitalAudioInterface, kAudioStreamTerminalTypeDisplayPort, kAudioStreamTerminalTypeHDMI, kAudioStreamTerminalTypeHeadphones, kAudioStreamTerminalTypeHeadsetMicrophone, kAudioStreamTerminalTypeLFESpeaker, kAudioStreamTerminalTypeLine, kAudioStreamTerminalTypeMicrophone, kAudioStreamTerminalTypeReceiverMicrophone, kAudioStreamTerminalTypeReceiverSpeaker, kAudioStreamTerminalTypeSpeaker, kAudioStreamTerminalTypeTTY};
 use crate::errors::{CoreAudioError, ErrorKind};
+use objc2_core_audio::{
+    kAudioDeviceTransportTypeAVB, kAudioDeviceTransportTypeAggregate,
+    kAudioDeviceTransportTypeAirPlay, kAudioDeviceTransportTypeAutoAggregate,
+    kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE,
+    kAudioDeviceTransportTypeBuiltIn, kAudioDeviceTransportTypeContinuityCapture,
+    kAudioDeviceTransportTypeContinuityCaptureWired,
+    kAudioDeviceTransportTypeContinuityCaptureWireless, kAudioDeviceTransportTypeDisplayPort,
+    kAudioDeviceTransportTypeFireWire, kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypePCI,
+    kAudioDeviceTransportTypeThunderbolt, kAudioDeviceTransportTypeUSB,
+    kAudioDeviceTransportTypeVirtual, kAudioStreamTerminalTypeDigitalAudioInterface,
+    kAudioStreamTerminalTypeDisplayPort, kAudioStreamTerminalTypeHDMI,
+    kAudioStreamTerminalTypeHeadphones, kAudioStreamTerminalTypeHeadsetMicrophone,
+    kAudioStreamTerminalTypeLFESpeaker, kAudioStreamTerminalTypeLine,
+    kAudioStreamTerminalTypeMicrophone, kAudioStreamTerminalTypeReceiverMicrophone,
+    kAudioStreamTerminalTypeReceiverSpeaker, kAudioStreamTerminalTypeSpeaker,
+    kAudioStreamTerminalTypeTTY,
+};
 
 /// Whether this process holds exclusive access to a device
 ///
@@ -51,7 +67,9 @@ impl TryFrom<u32> for PowerHint {
         match value {
             0 => Ok(Self::None),
             1 => Ok(Self::PowerSaving),
-            _ => Err(CoreAudioError::from_error_kind(ErrorKind::PowerHintConversion)),
+            _ => Err(CoreAudioError::from_error_kind(
+                ErrorKind::PowerHintConversion,
+            )),
         }
     }
 }
@@ -206,8 +224,12 @@ impl From<TransportType> for u32 {
             TransportType::AVB => kAudioDeviceTransportTypeAVB,
             TransportType::Thunderbolt => kAudioDeviceTransportTypeThunderbolt,
             TransportType::ContinuityCapture => kAudioDeviceTransportTypeContinuityCapture,
-            TransportType::ContinuityCaptureWired => kAudioDeviceTransportTypeContinuityCaptureWired,
-            TransportType::ContinuityCaptureWireless => kAudioDeviceTransportTypeContinuityCaptureWireless,
+            TransportType::ContinuityCaptureWired => {
+                kAudioDeviceTransportTypeContinuityCaptureWired
+            }
+            TransportType::ContinuityCaptureWireless => {
+                kAudioDeviceTransportTypeContinuityCaptureWireless
+            }
             TransportType::Unknown(id) => id,
         }
     }

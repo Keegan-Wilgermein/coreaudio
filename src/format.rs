@@ -6,10 +6,21 @@
 #![allow(unsafe_code)]
 
 // ---- Imports ------------
-use crate::{data_types::{ChannelDescription, ChannelLayout, ChannelLayoutTag}, errors::{CoreAudioError, OSStatusCheck}};
+use crate::{
+    data_types::{ChannelDescription, ChannelLayout, ChannelLayoutTag},
+    errors::{CoreAudioError, OSStatusCheck},
+};
+use core_foundation::{
+    base::TCFType,
+    string::{CFString, CFStringRef},
+};
+use objc2_audio_toolbox::{
+    AudioFormatGetProperty, AudioFormatGetPropertyInfo, AudioFormatPropertyID,
+    kAudioFormatProperty_ChannelLayoutForTag, kAudioFormatProperty_ChannelLayoutName,
+    kAudioFormatProperty_ChannelLayoutSimpleName, kAudioFormatProperty_ChannelName,
+    kAudioFormatProperty_ChannelShortName,
+};
 use std::{ffi::c_void, ptr::null_mut};
-use core_foundation::{base::TCFType, string::{CFString, CFStringRef}};
-use objc2_audio_toolbox::{AudioFormatGetProperty, AudioFormatGetPropertyInfo, AudioFormatPropertyID, kAudioFormatProperty_ChannelLayoutForTag, kAudioFormatProperty_ChannelLayoutName, kAudioFormatProperty_ChannelLayoutSimpleName, kAudioFormatProperty_ChannelName, kAudioFormatProperty_ChannelShortName};
 
 // ---- Functions -----------
 
@@ -27,7 +38,10 @@ pub fn layout_name(layout: &ChannelLayout) -> Result<String, CoreAudioError> {
 
 /// The short name of a layout, e.g. "5.1"
 pub fn layout_simple_name(layout: &ChannelLayout) -> Result<String, CoreAudioError> {
-    get_string(kAudioFormatProperty_ChannelLayoutSimpleName, &layout.to_bytes())
+    get_string(
+        kAudioFormatProperty_ChannelLayoutSimpleName,
+        &layout.to_bytes(),
+    )
 }
 
 /// The name of the speaker a channel feeds, e.g. "Left Surround"
@@ -37,7 +51,10 @@ pub fn channel_name(description: &ChannelDescription) -> Result<String, CoreAudi
 
 /// The abbreviated name of the speaker a channel feeds, e.g. "Ls"
 pub fn channel_short_name(description: &ChannelDescription) -> Result<String, CoreAudioError> {
-    get_string(kAudioFormatProperty_ChannelShortName, &description.to_bytes())
+    get_string(
+        kAudioFormatProperty_ChannelShortName,
+        &description.to_bytes(),
+    )
 }
 
 /// Reads a variable-length `AudioFormat` property into a byte buffer
@@ -49,7 +66,8 @@ fn get_bytes(property: AudioFormatPropertyID, specifier: &[u8]) -> Result<Vec<u8
             specifier.len() as u32,
             specifier.as_ptr() as *const c_void,
             (&mut size).into(),
-        ).check()?;
+        )
+        .check()?;
 
         let mut buffer = vec![0u8; size as usize];
         AudioFormatGetProperty(
@@ -58,7 +76,8 @@ fn get_bytes(property: AudioFormatPropertyID, specifier: &[u8]) -> Result<Vec<u8
             specifier.as_ptr() as *const c_void,
             &mut size,
             buffer.as_mut_ptr() as *mut c_void,
-        ).check()?;
+        )
+        .check()?;
 
         buffer.truncate(size as usize);
         Ok(buffer)
@@ -78,10 +97,13 @@ fn get_string(property: AudioFormatPropertyID, specifier: &[u8]) -> Result<Strin
             specifier.as_ptr() as *const c_void,
             &mut size,
             &mut name as *mut CFStringRef as *mut c_void,
-        ).check()?;
+        )
+        .check()?;
 
         if name.is_null() {
-            return Err(CoreAudioError::from_error_kind(crate::ErrorKind::CFStringConversion));
+            return Err(CoreAudioError::from_error_kind(
+                crate::ErrorKind::CFStringConversion,
+            ));
         }
 
         Ok(CFString::wrap_under_create_rule(name).to_string())

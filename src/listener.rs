@@ -16,11 +16,25 @@
 #![allow(unsafe_code)]
 
 // ---- Imports --------
-use std::{ffi::c_void, marker::PhantomData, sync::mpsc::{self, Receiver, RecvTimeoutError, Sender}, time::Duration};
-use std::ptr::NonNull;
-use objc2_core_audio::{AudioObjectAddPropertyListener, AudioObjectID, AudioObjectPropertyAddress, AudioObjectRemovePropertyListener};
 use crate::errors::OSStatus;
-use crate::{Property, data_types::PropertySize, errors::{CoreAudioError, ErrorKind, OSStatusCheck}, object::get_property_internal, property::{Listenable, NoExtra, Qualifier}};
+use crate::{
+    Property,
+    data_types::PropertySize,
+    errors::{CoreAudioError, ErrorKind, OSStatusCheck},
+    object::get_property_internal,
+    property::{Listenable, NoExtra, Qualifier},
+};
+use objc2_core_audio::{
+    AudioObjectAddPropertyListener, AudioObjectID, AudioObjectPropertyAddress,
+    AudioObjectRemovePropertyListener,
+};
+use std::ptr::NonNull;
+use std::{
+    ffi::c_void,
+    marker::PhantomData,
+    sync::mpsc::{self, Receiver, RecvTimeoutError, Sender},
+    time::Duration,
+};
 
 // ---- Structs ------------
 
@@ -35,10 +49,7 @@ struct Listener<D, A> {
 }
 
 impl<D, A> Listener<D, A> {
-    fn new(
-        id: AudioObjectID,
-        address: AudioObjectPropertyAddress,
-    ) -> Self {
+    fn new(id: AudioObjectID, address: AudioObjectPropertyAddress) -> Self {
         Self {
             id,
             address,
@@ -106,11 +117,8 @@ impl<T, D, A> PropertyListener<T, D, A> {
     ) -> Result<Self, CoreAudioError> {
         let (sender, receiver) = mpsc::channel::<T>();
 
-        let callback_client_data = Box::into_raw(Box::new(ClientCallbackData {
-            size,
-            read,
-            sender,
-        }));
+        let callback_client_data =
+            Box::into_raw(Box::new(ClientCallbackData { size, read, sender }));
 
         unsafe {
             AudioObjectAddPropertyListener(
@@ -118,7 +126,8 @@ impl<T, D, A> PropertyListener<T, D, A> {
                 std::ptr::NonNull::from(&address),
                 Some(io_callback::<T, D, A>),
                 callback_client_data as *mut c_void,
-            ).check()?;
+            )
+            .check()?;
         };
 
         Ok(Self {
@@ -159,7 +168,7 @@ impl<T, D, A> PropertyListener<T, D, A> {
     pub fn block_until_change(&self) -> Result<T, CoreAudioError> {
         match self.receiver.recv() {
             Ok(value) => Ok(value),
-            Err(_) => Err(CoreAudioError::from_error_kind(ErrorKind::ListenerHangUp))
+            Err(_) => Err(CoreAudioError::from_error_kind(ErrorKind::ListenerHangUp)),
         }
     }
 
@@ -170,16 +179,14 @@ impl<T, D, A> PropertyListener<T, D, A> {
     pub fn block_for_duration(&self, duration: Duration) -> Result<T, CoreAudioError> {
         match self.receiver.recv_timeout(duration) {
             Ok(value) => Ok(value),
-            Err(error) => {
-                match error {
-                    RecvTimeoutError::Timeout => Err(
-                        CoreAudioError::from_error_kind(ErrorKind::ListenerTimeout)
-                    ),
-                    RecvTimeoutError::Disconnected => Err(
-                        CoreAudioError::from_error_kind(ErrorKind::ListenerHangUp)
-                    ),
+            Err(error) => match error {
+                RecvTimeoutError::Timeout => {
+                    Err(CoreAudioError::from_error_kind(ErrorKind::ListenerTimeout))
                 }
-            }
+                RecvTimeoutError::Disconnected => {
+                    Err(CoreAudioError::from_error_kind(ErrorKind::ListenerHangUp))
+                }
+            },
         }
     }
 }
@@ -259,7 +266,8 @@ impl<T, D, A> CallbackListener<T, D, A> {
                 std::ptr::NonNull::from(&address),
                 Some(sink_callback::<T, D, A>),
                 callback_client_data as *mut c_void,
-            ).check()
+            )
+            .check()
         };
 
         if let Err(error) = status {
@@ -296,9 +304,7 @@ unsafe extern "C-unwind" fn io_callback<T, D, A>(
     address: NonNull<AudioObjectPropertyAddress>,
     client_data: *mut c_void,
 ) -> OSStatus {
-    let client_data = unsafe {
-        &*(client_data as *mut ClientCallbackData<T>)
-    };
+    let client_data = unsafe { &*(client_data as *mut ClientCallbackData<T>) };
 
     let property: Property<T, D, A, Listenable, NoExtra> = Property::new(
         unsafe { *address.as_ptr() },
@@ -331,9 +337,7 @@ unsafe extern "C-unwind" fn sink_callback<T, D, A>(
     address: NonNull<AudioObjectPropertyAddress>,
     client_data: *mut c_void,
 ) -> OSStatus {
-    let client_data = unsafe {
-        &*(client_data as *mut SinkCallbackData<T>)
-    };
+    let client_data = unsafe { &*(client_data as *mut SinkCallbackData<T>) };
 
     let property: Property<T, D, A, Listenable, NoExtra> = Property::new(
         unsafe { *address.as_ptr() },

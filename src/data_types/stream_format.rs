@@ -1,8 +1,17 @@
 //! Stream formats: sample encodings, format IDs/flags and stream descriptions
 
-use objc2_core_audio_types::{AudioStreamBasicDescription, kAudioFormatAC3, kAudioFormatAES3, kAudioFormatALaw, kAudioFormatAMR, kAudioFormatAMR_WB, kAudioFormatAPAC, kAudioFormatAppleLossless, kAudioFormatEnhancedAC3, kAudioFormatFlagIsBigEndian, kAudioFormatFlagIsFloat, kAudioFormatFlagIsNonInterleaved, kAudioFormatFlagIsNonMixable, kAudioFormatFlagIsPacked, kAudioFormatFlagIsSignedInteger, kAudioFormatLinearPCM, kAudioFormatMPEG4AAC, kAudioFormatMPEG4AAC_ELD, kAudioFormatMPEG4AAC_ELD_SBR, kAudioFormatMPEG4AAC_ELD_V2, kAudioFormatMPEG4AAC_HE, kAudioFormatMPEG4AAC_HE_V2, kAudioFormatMPEG4AAC_LD, kAudioFormatMPEG4AAC_Spatial, kAudioFormatMPEGLayer3, kAudioFormatOpus};
-use objc2_core_audio::{AudioStreamRangedDescription};
 use super::SampleRateRange;
+use objc2_core_audio::AudioStreamRangedDescription;
+use objc2_core_audio_types::{
+    AudioStreamBasicDescription, kAudioFormatAC3, kAudioFormatAES3, kAudioFormatALaw,
+    kAudioFormatAMR, kAudioFormatAMR_WB, kAudioFormatAPAC, kAudioFormatAppleLossless,
+    kAudioFormatEnhancedAC3, kAudioFormatFlagIsBigEndian, kAudioFormatFlagIsFloat,
+    kAudioFormatFlagIsNonInterleaved, kAudioFormatFlagIsNonMixable, kAudioFormatFlagIsPacked,
+    kAudioFormatFlagIsSignedInteger, kAudioFormatLinearPCM, kAudioFormatMPEG4AAC,
+    kAudioFormatMPEG4AAC_ELD, kAudioFormatMPEG4AAC_ELD_SBR, kAudioFormatMPEG4AAC_ELD_V2,
+    kAudioFormatMPEG4AAC_HE, kAudioFormatMPEG4AAC_HE_V2, kAudioFormatMPEG4AAC_LD,
+    kAudioFormatMPEG4AAC_Spatial, kAudioFormatMPEGLayer3, kAudioFormatOpus,
+};
 
 /// Maximum value for a 20-bit signed integer sample
 const I20_MAX: i32 = 2i32.pow(20 - 1) - 1;
@@ -76,7 +85,7 @@ impl SampleFormat {
     }
 
     /// ## Deprecated
-    /// 
+    ///
     /// Convert normalized f32 samples (`[-1.0, 1.0]`) into this format, writing
     /// raw little-endian bytes into `dst`
     /// `self` picks the output type — not the caller — so it can't silently
@@ -86,55 +95,71 @@ impl SampleFormat {
     #[deprecated = "Will no longer be updating this function"]
     pub fn resample(&self, src: &[f32], dst: &mut [u8]) {
         match self {
-            SampleFormat::F32 => for (s, d) in src.iter().zip(dst.chunks_exact_mut(4)) {
-                d.copy_from_slice(&s.to_le_bytes());
-            },
-            SampleFormat::F64 => for (s, d) in src.iter().zip(dst.chunks_exact_mut(8)) {
-                d.copy_from_slice(&(*s as f64).to_le_bytes());
-            },
-            SampleFormat::I8 => for (s, d) in src.iter().zip(dst.chunks_exact_mut(1)) {
-                d[0] = (s.clamp(-1.0, 1.0) as f64 * i8::MAX as f64).round() as i8 as u8;
-            },
-            SampleFormat::I16 => for (s, d) in src.iter().zip(dst.chunks_exact_mut(2)) {
-                let v = (s.clamp(-1.0, 1.0) as f64 * i16::MAX as f64).round() as i16;
-                d.copy_from_slice(&v.to_le_bytes());
-            },
-            SampleFormat::I20 => for (s, d) in src.iter().zip(dst.chunks_exact_mut(3)) {
-                let v = (s.clamp(-1.0, 1.0) as f64 * I20_MAX as f64).round() as i32;
-                d.copy_from_slice(&v.to_le_bytes()[..3]);                  // packing: CONFIRM
-            },
-            SampleFormat::I24 => for (s, d) in src.iter().zip(dst.chunks_exact_mut(3)) {
-                let v = (s.clamp(-1.0, 1.0) as f64 * I24_MAX as f64).round() as i32;
-                d.copy_from_slice(&v.to_le_bytes()[..3]);                  // packing: CONFIRM
-            },
-            SampleFormat::I32 => for (s, d) in src.iter().zip(dst.chunks_exact_mut(4)) {
-                let v = (s.clamp(-1.0, 1.0) as f64 * i32::MAX as f64).round() as i32;
-                d.copy_from_slice(&v.to_le_bytes());
-            },
-            SampleFormat::I64 => for (s, d) in src.iter().zip(dst.chunks_exact_mut(8)) {
-                let v = (s.clamp(-1.0, 1.0) as f64 * i64::MAX as f64).round() as i64;
-                d.copy_from_slice(&v.to_le_bytes());
-            },
+            SampleFormat::F32 => {
+                for (s, d) in src.iter().zip(dst.chunks_exact_mut(4)) {
+                    d.copy_from_slice(&s.to_le_bytes());
+                }
+            }
+            SampleFormat::F64 => {
+                for (s, d) in src.iter().zip(dst.chunks_exact_mut(8)) {
+                    d.copy_from_slice(&(*s as f64).to_le_bytes());
+                }
+            }
+            SampleFormat::I8 => {
+                for (s, d) in src.iter().zip(dst.chunks_exact_mut(1)) {
+                    d[0] = (s.clamp(-1.0, 1.0) as f64 * i8::MAX as f64).round() as i8 as u8;
+                }
+            }
+            SampleFormat::I16 => {
+                for (s, d) in src.iter().zip(dst.chunks_exact_mut(2)) {
+                    let v = (s.clamp(-1.0, 1.0) as f64 * i16::MAX as f64).round() as i16;
+                    d.copy_from_slice(&v.to_le_bytes());
+                }
+            }
+            SampleFormat::I20 => {
+                for (s, d) in src.iter().zip(dst.chunks_exact_mut(3)) {
+                    let v = (s.clamp(-1.0, 1.0) as f64 * I20_MAX as f64).round() as i32;
+                    d.copy_from_slice(&v.to_le_bytes()[..3]); // packing: CONFIRM
+                }
+            }
+            SampleFormat::I24 => {
+                for (s, d) in src.iter().zip(dst.chunks_exact_mut(3)) {
+                    let v = (s.clamp(-1.0, 1.0) as f64 * I24_MAX as f64).round() as i32;
+                    d.copy_from_slice(&v.to_le_bytes()[..3]); // packing: CONFIRM
+                }
+            }
+            SampleFormat::I32 => {
+                for (s, d) in src.iter().zip(dst.chunks_exact_mut(4)) {
+                    let v = (s.clamp(-1.0, 1.0) as f64 * i32::MAX as f64).round() as i32;
+                    d.copy_from_slice(&v.to_le_bytes());
+                }
+            }
+            SampleFormat::I64 => {
+                for (s, d) in src.iter().zip(dst.chunks_exact_mut(8)) {
+                    let v = (s.clamp(-1.0, 1.0) as f64 * i64::MAX as f64).round() as i64;
+                    d.copy_from_slice(&v.to_le_bytes());
+                }
+            }
             SampleFormat::U8 => {
                 let mid = (u8::MAX as f64 + 1.0) / 2.0;
                 for (s, d) in src.iter().zip(dst.chunks_exact_mut(1)) {
                     d[0] = (s.clamp(-1.0, 1.0) as f64 * (mid - 1.0) + mid).round() as u8;
                 }
-            },
+            }
             SampleFormat::U16 => {
                 let mid = (u16::MAX as f64 + 1.0) / 2.0;
                 for (s, d) in src.iter().zip(dst.chunks_exact_mut(2)) {
                     let v = (s.clamp(-1.0, 1.0) as f64 * (mid - 1.0) + mid).round() as u16;
                     d.copy_from_slice(&v.to_le_bytes());
                 }
-            },
+            }
             SampleFormat::U32 => {
                 let mid = (u32::MAX as f64 + 1.0) / 2.0;
                 for (s, d) in src.iter().zip(dst.chunks_exact_mut(4)) {
                     let v = (s.clamp(-1.0, 1.0) as f64 * (mid - 1.0) + mid).round() as u32;
                     d.copy_from_slice(&v.to_le_bytes());
                 }
-            },
+            }
         }
     }
 }
@@ -218,7 +243,7 @@ impl From<u32> for FormatId {
             kAudioFormatEnhancedAC3 => Self::EnhancedAC3,
             kAudioFormatOpus => Self::Opus,
             kAudioFormatMPEGLayer3 => Self::MP3,
-            _ => Self::Unknown(value)
+            _ => Self::Unknown(value),
         }
     }
 }
@@ -227,17 +252,15 @@ impl Into<u32> for FormatId {
     fn into(self) -> u32 {
         match self {
             FormatId::LinearPCM => kAudioFormatLinearPCM,
-            FormatId::AAC(aacformat) => {
-                match aacformat {
-                    AACFormat::Standard => kAudioFormatMPEG4AAC,
-                    AACFormat::ELD => kAudioFormatMPEG4AAC_ELD,
-                    AACFormat::ELDv2 => kAudioFormatMPEG4AAC_ELD_V2,
-                    AACFormat::ELDSBR => kAudioFormatMPEG4AAC_ELD_SBR,
-                    AACFormat::HE => kAudioFormatMPEG4AAC_HE,
-                    AACFormat::HEv2 => kAudioFormatMPEG4AAC_HE_V2,
-                    AACFormat::LD => kAudioFormatMPEG4AAC_LD,
-                    AACFormat::Spatial => kAudioFormatMPEG4AAC_Spatial,
-                }
+            FormatId::AAC(aacformat) => match aacformat {
+                AACFormat::Standard => kAudioFormatMPEG4AAC,
+                AACFormat::ELD => kAudioFormatMPEG4AAC_ELD,
+                AACFormat::ELDv2 => kAudioFormatMPEG4AAC_ELD_V2,
+                AACFormat::ELDSBR => kAudioFormatMPEG4AAC_ELD_SBR,
+                AACFormat::HE => kAudioFormatMPEG4AAC_HE,
+                AACFormat::HEv2 => kAudioFormatMPEG4AAC_HE_V2,
+                AACFormat::LD => kAudioFormatMPEG4AAC_LD,
+                AACFormat::Spatial => kAudioFormatMPEG4AAC_Spatial,
             },
             FormatId::ALAC => kAudioFormatAppleLossless,
             FormatId::AC3 => kAudioFormatAC3,
@@ -302,10 +325,18 @@ impl Into<u32> for FormatFlags {
             SampleEncoding::UnSignedInt => (),
         }
 
-        if self.is_big_endian  { result |= kAudioFormatFlagIsBigEndian }
-        if self.is_packed      { result |= kAudioFormatFlagIsPacked }
-        if !self.is_interleaved { result |= kAudioFormatFlagIsNonInterleaved }
-        if self.is_non_mixable { result |= kAudioFormatFlagIsNonMixable }
+        if self.is_big_endian {
+            result |= kAudioFormatFlagIsBigEndian
+        }
+        if self.is_packed {
+            result |= kAudioFormatFlagIsPacked
+        }
+        if !self.is_interleaved {
+            result |= kAudioFormatFlagIsNonInterleaved
+        }
+        if self.is_non_mixable {
+            result |= kAudioFormatFlagIsNonMixable
+        }
 
         result
     }
@@ -502,7 +533,7 @@ impl StreamDescription {
 /// Used by `STREAM_AVAILABLE_VIRTUAL_FORMATS` and
 /// `STREAM_AVAILABLE_PHYSICAL_FORMATS` to describe each format the stream can
 /// operate in
-/// 
+///
 /// Essentially just a `StreamDescription` but with a `SampleRateRange`
 #[derive(Debug)]
 pub struct StreamRangedDescription {

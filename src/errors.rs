@@ -9,19 +9,13 @@
 #![forbid(unsafe_code)]
 
 // ---- Imports ------------
-use std::{error::Error, fmt::Display};
 use objc2_core_audio::{
-    kAudioHardwareBadDeviceError,
-    kAudioHardwareBadObjectError,
-    kAudioHardwareBadPropertySizeError,
-    kAudioHardwareBadStreamError,
-    kAudioHardwareIllegalOperationError,
-    kAudioHardwareNotReadyError,
-    kAudioHardwareNotRunningError,
-    kAudioHardwareUnknownPropertyError,
-    kAudioHardwareUnspecifiedError,
-    kAudioHardwareUnsupportedOperationError
+    kAudioHardwareBadDeviceError, kAudioHardwareBadObjectError, kAudioHardwareBadPropertySizeError,
+    kAudioHardwareBadStreamError, kAudioHardwareIllegalOperationError, kAudioHardwareNotReadyError,
+    kAudioHardwareNotRunningError, kAudioHardwareUnknownPropertyError,
+    kAudioHardwareUnspecifiedError, kAudioHardwareUnsupportedOperationError,
 };
+use std::{error::Error, fmt::Display};
 
 // ---- Types ------------
 
@@ -52,7 +46,6 @@ const kAudioHardwarePermissionsError: OSStatus = 0x21686F67;
 #[derive(Debug, Clone, Copy)]
 pub enum ErrorKind {
     // ---- CoreAudio HAL errors ------------
-
     /// The HAL is not running, typically because no audio devices are available
     NotRunning,
     /// An unspecified error with no additional detail from CoreAudio
@@ -83,7 +76,6 @@ pub enum ErrorKind {
     Unknown,
 
     // ---- Conversion errors ------------
-
     /// Failed to interpret a `CFStringRef` as a Rust `String`
     CFStringConversion,
     /// Failed to convert a `u32` to a `bool`
@@ -110,14 +102,12 @@ pub enum ErrorKind {
     ChannelLayoutConversion,
 
     // ---- Listener errors ------------
-
     /// The listener's internal channel was closed unexpectedly
     ListenerHangUp,
     /// A timed wait on a listener expired before a change was received
     ListenerTimeout,
 
     // ---- IO Proc errors ------------
-
     /// `play()` was called on an `IOProc` that is already running
     AlreadyRunning,
     /// `pause()` was called on an `IOProc` that is already paused
@@ -146,7 +136,10 @@ impl Display for CoreAudioError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{:?} (code: '{}' | {})", self.kind, self.stringify_code(), self.code,
+            "{:?} (code: '{}' | {})",
+            self.kind,
+            self.stringify_code(),
+            self.code,
         )
     }
 }
@@ -170,10 +163,7 @@ impl From<OSStatus> for CoreAudioError {
             _ => ErrorKind::Unknown,
         };
 
-        Self {
-            kind,
-            code: value,
-        }
+        Self { kind, code: value }
     }
 }
 
@@ -182,10 +172,7 @@ impl CoreAudioError {
     /// `OSStatus` code
     /// The `code` field is set to `-1`
     pub(crate) fn from_error_kind(kind: ErrorKind) -> Self {
-        Self {
-            kind,
-            code: -1,
-        }
+        Self { kind, code: -1 }
     }
 
     /// Returns the categorised [`ErrorKind`]
@@ -200,10 +187,7 @@ impl CoreAudioError {
 
     /// Returns the `ErrorKind` and raw `OSStatus` as a tuple `(kind, code)`
     pub fn as_tuple(&self) -> (ErrorKind, i32) {
-        (
-            self.kind,
-            self.code,
-        )
+        (self.kind, self.code)
     }
 
     /// Converts the raw `OSStatus` to its four-character-code string
@@ -226,7 +210,7 @@ impl OSStatusCheck for OSStatus {
     fn check(self) -> Result<(), CoreAudioError> {
         match self {
             0 => Ok(()),
-            _ => Err(CoreAudioError::from(self))
+            _ => Err(CoreAudioError::from(self)),
         }
     }
 }

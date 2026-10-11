@@ -14,10 +14,17 @@
 #![allow(unsafe_code)]
 
 // ---- Imports ------------
-use crate::{errors::{CoreAudioError, OSStatusCheck}, object::{AudioObject, Process, Tap}, property::TAP_UID};
-use objc2_core_audio::{AudioObjectID};
+use crate::{
+    errors::{CoreAudioError, OSStatusCheck},
+    object::{AudioObject, Process, Tap},
+    property::TAP_UID,
+};
 use objc2::AllocAnyThread;
-use objc2_core_audio::{AudioHardwareCreateProcessTap, AudioHardwareDestroyProcessTap, CATapDescription, CATapMuteBehavior};
+use objc2_core_audio::AudioObjectID;
+use objc2_core_audio::{
+    AudioHardwareCreateProcessTap, AudioHardwareDestroyProcessTap, CATapDescription,
+    CATapMuteBehavior,
+};
 use objc2_foundation::{NSArray, NSNumber, NSString};
 
 // ---- Enums ------------
@@ -97,7 +104,11 @@ impl ProcessTap {
         Self::create(&description, name, mute)
     }
 
-    fn create(description: &CATapDescription, name: &str, mute: TapMute) -> Result<Self, CoreAudioError> {
+    fn create(
+        description: &CATapDescription,
+        name: &str,
+        mute: TapMute,
+    ) -> Result<Self, CoreAudioError> {
         let mut id: AudioObjectID = 0;
         unsafe {
             description.setName(&NSString::from_str(name));
@@ -132,7 +143,10 @@ impl ProcessTap {
 
 /// The process object IDs as the `NSArray<NSNumber>` a tap description takes
 fn process_ids(processes: &[AudioObject<Process>]) -> objc2::rc::Retained<NSArray<NSNumber>> {
-    let ids: Vec<_> = processes.iter().map(|process| NSNumber::new_u32(process.id())).collect();
+    let ids: Vec<_> = processes
+        .iter()
+        .map(|process| NSNumber::new_u32(process.id()))
+        .collect();
     NSArray::from_retained_slice(&ids)
 }
 
