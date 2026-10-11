@@ -429,7 +429,7 @@ impl AudioObject<Device> {
     where
         F: FnMut(&mut [AudioBuffer]) + Send + 'static,
     {
-        IOProc::try_new(&self, scope, callback)
+        IOProc::try_new(self, scope, callback)
     }
 }
 

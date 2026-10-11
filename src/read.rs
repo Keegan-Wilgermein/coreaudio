@@ -111,8 +111,7 @@ pub(crate) fn read_stream_description(bytes: &[u8]) -> Result<StreamDescription,
 
     let asbd = unsafe { std::ptr::read(bytes.as_ptr() as *const AudioStreamBasicDescription) };
 
-    StreamDescription::try_from(asbd)
-        .map_err(|_| CoreAudioError::from_error_kind(ErrorKind::StreamDescriptionConversion))
+    Ok(StreamDescription::from(asbd))
 }
 
 /// Reads an `AudioValueRange` from `bytes` and converts it to a
@@ -131,7 +130,7 @@ pub(crate) fn read_buffer_size_range(bytes: &[u8]) -> Result<BufferFrameSizeRang
 
 /// Reads a packed array of `AudioObjectID` values from `bytes`
 pub(crate) fn read_vec_audio_object_id(bytes: &[u8]) -> Result<Vec<AudioObjectID>, CoreAudioError> {
-    if bytes.len() % size_of::<AudioObjectID>() != 0 {
+    if !bytes.len().is_multiple_of(size_of::<AudioObjectID>()) {
         return Err(CoreAudioError::from_error_kind(
             ErrorKind::AudioObjectIdConversion,
         ));
@@ -148,7 +147,7 @@ pub(crate) fn read_vec_audio_object_id(bytes: &[u8]) -> Result<Vec<AudioObjectID
 pub(crate) fn read_vec_sample_rate_range(
     bytes: &[u8],
 ) -> Result<Vec<SampleRateRange>, CoreAudioError> {
-    if bytes.len() % size_of::<AudioValueRange>() != 0 {
+    if !bytes.len().is_multiple_of(size_of::<AudioValueRange>()) {
         return Err(CoreAudioError::from_error_kind(
             ErrorKind::ValueRangeConversion,
         ));
@@ -167,7 +166,7 @@ pub(crate) fn read_vec_sample_rate_range(
 pub(crate) fn read_vec_stream_ranged_description(
     bytes: &[u8],
 ) -> Result<Vec<StreamRangedDescription>, CoreAudioError> {
-    if bytes.len() % size_of::<AudioStreamRangedDescription>() != 0 {
+    if !bytes.len().is_multiple_of(size_of::<AudioStreamRangedDescription>()) {
         return Err(CoreAudioError::from_error_kind(
             ErrorKind::StreamDescriptionConversion,
         ));

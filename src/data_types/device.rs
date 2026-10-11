@@ -42,11 +42,11 @@ impl From<i32> for HogMode {
     }
 }
 
-impl Into<i32> for HogMode {
-    fn into(self) -> i32 {
-        match self {
-            Self::Released => -1,
-            Self::Owned(pid) => pid,
+impl From<HogMode> for i32 {
+    fn from(val: HogMode) -> Self {
+        match val {
+            HogMode::Released => -1,
+            HogMode::Owned(pid) => pid,
         }
     }
 }
@@ -74,11 +74,11 @@ impl TryFrom<u32> for PowerHint {
     }
 }
 
-impl Into<u32> for PowerHint {
-    fn into(self) -> u32 {
-        match self {
-            Self::None => 0,
-            Self::PowerSaving => 1,
+impl From<PowerHint> for u32 {
+    fn from(val: PowerHint) -> Self {
+        match val {
+            PowerHint::None => 0,
+            PowerHint::PowerSaving => 1,
         }
     }
 }

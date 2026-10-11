@@ -248,9 +248,9 @@ impl From<u32> for FormatId {
     }
 }
 
-impl Into<u32> for FormatId {
-    fn into(self) -> u32 {
-        match self {
+impl From<FormatId> for u32 {
+    fn from(val: FormatId) -> Self {
+        match val {
             FormatId::LinearPCM => kAudioFormatLinearPCM,
             FormatId::AAC(aacformat) => match aacformat {
                 AACFormat::Standard => kAudioFormatMPEG4AAC,
@@ -315,26 +315,26 @@ impl From<u32> for FormatFlags {
     }
 }
 
-impl Into<u32> for FormatFlags {
-    fn into(self) -> u32 {
+impl From<FormatFlags> for u32 {
+    fn from(val: FormatFlags) -> Self {
         let mut result = 0u32;
 
-        match self.encoding {
+        match val.encoding {
             SampleEncoding::Float => result |= kAudioFormatFlagIsFloat,
             SampleEncoding::SignedInt => result |= kAudioFormatFlagIsSignedInteger,
             SampleEncoding::UnSignedInt => (),
         }
 
-        if self.is_big_endian {
+        if val.is_big_endian {
             result |= kAudioFormatFlagIsBigEndian
         }
-        if self.is_packed {
+        if val.is_packed {
             result |= kAudioFormatFlagIsPacked
         }
-        if !self.is_interleaved {
+        if !val.is_interleaved {
             result |= kAudioFormatFlagIsNonInterleaved
         }
-        if self.is_non_mixable {
+        if val.is_non_mixable {
             result |= kAudioFormatFlagIsNonMixable
         }
 
@@ -470,18 +470,18 @@ impl From<AudioStreamBasicDescription> for StreamDescription {
     }
 }
 
-impl Into<AudioStreamBasicDescription> for StreamDescription {
-    fn into(self) -> AudioStreamBasicDescription {
+impl From<StreamDescription> for AudioStreamBasicDescription {
+    fn from(val: StreamDescription) -> Self {
         AudioStreamBasicDescription {
-            mSampleRate: self.sample_rate,
-            mFormatID: self.format_id.into(),
-            mFormatFlags: self.flags.into(),
-            mBytesPerPacket: self.bytes_per_packet,
-            mFramesPerPacket: self.frames_per_packet,
-            mBytesPerFrame: self.bytes_per_frame,
-            mChannelsPerFrame: self.channels_per_frame,
-            mBitsPerChannel: self.bits_per_channel,
-            mReserved: self.reserved,
+            mSampleRate: val.sample_rate,
+            mFormatID: val.format_id.into(),
+            mFormatFlags: val.flags.into(),
+            mBytesPerPacket: val.bytes_per_packet,
+            mFramesPerPacket: val.frames_per_packet,
+            mBytesPerFrame: val.bytes_per_frame,
+            mChannelsPerFrame: val.channels_per_frame,
+            mBitsPerChannel: val.bits_per_channel,
+            mReserved: val.reserved,
         }
     }
 }
