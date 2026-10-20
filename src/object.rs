@@ -253,6 +253,7 @@ impl<C> AudioObject<C> {
     /// Use this if you have to interact with a
     /// device that doesn't follow the normal conventions
     ///
+    /// # Safety
     /// Unlike the normal property setter, this version
     /// will ignore whether the property is
     /// - Writable
@@ -278,6 +279,7 @@ impl<C> AudioObject<C> {
     /// Use this if you have to interact with a
     /// device that doesn't follow the normal conventions
     ///
+    /// # Safety
     /// Unlike the normal listener, this version
     /// will ignore whether the property is
     /// - [`Listenable`](crate::property::Listenable)
@@ -303,12 +305,9 @@ impl<C> AudioObject<C> {
 
     /// Forcefully registers a listener for a property that calls `sink` on each change
     ///
+    /// # Safety
     /// The same rules are ignored as for
     /// [`force_add_listener`](Self::force_add_listener)
-    ///
-    /// `sink` runs on CoreAudio's notification thread with the new value, or
-    /// the error reading it, so a property that can't be read is seen
-    /// rather than silently skipped
     ///
     /// Drop the returned [`CallbackListener`] to unregister
     pub unsafe fn force_add_listener_with<V, D, A, L, E, S>(

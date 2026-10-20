@@ -982,6 +982,42 @@ pub const DEVICE_VOLUME_DECIBELS: Property<f32, Device, ReadWrite, Listenable, N
         encode_f32,
     );
 
+/// The volume of the specified channel in dBFS (`0.0` = full scale, negative = attenuation)
+///
+/// dB steps are perceptually uniform, making this the preferred representation
+/// for UI controls
+/// See `DEVICE_VOLUME_RANGE_DECIBELS` for the valid range on this channel
+/// 
+/// Output scoped
+pub const DEVICE_OUTPUT_VOLUME_DECIBELS: Property<f32, Device, ReadWrite, Listenable, NeedElement> =
+    Property::new(
+        address(
+            kAudioDevicePropertyVolumeDecibels,
+            kAudioObjectPropertyScopeOutput,
+        ),
+        PropertySize::Known(size_of::<f32>() as u32),
+        read_f32,
+        encode_f32,
+    );
+
+/// The volume of the specified channel in dBFS (`0.0` = full scale, negative = attenuation)
+///
+/// dB steps are perceptually uniform, making this the preferred representation
+/// for UI controls
+/// See `DEVICE_VOLUME_RANGE_DECIBELS` for the valid range on this channel
+/// 
+/// Input scoped
+pub const DEVICE_INPUT_VOLUME_DECIBELS: Property<f32, Device, ReadWrite, Listenable, NeedElement> =
+    Property::new(
+        address(
+            kAudioDevicePropertyVolumeDecibels,
+            kAudioObjectPropertyScopeInput,
+        ),
+        PropertySize::Known(size_of::<f32>() as u32),
+        read_f32,
+        encode_f32,
+    );
+
 /// The minimum and maximum volume values in dB that the specified channel supports
 ///
 /// Use this to set the bounds of a volume slider
@@ -1014,6 +1050,42 @@ pub const DEVICE_VOLUME_SCALAR_TO_DECIBELS: Property<f32, Device, ReadOnly, Sile
         encode_f32,
     );
 
+/// Translates a linear scalar volume to its dB equivalent for the specified channel
+///
+/// The hardware applies its own non-linear mapping, so this gives a more
+/// accurate conversion than a generic formula
+/// Set the element to the channel and read back the converted dB value
+/// 
+/// Output scoped
+pub const DEVICE_OUTPUT_VOLUME_SCALAR_TO_DECIBELS: Property<f32, Device, ReadOnly, Silent, NeedElement> =
+    Property::new(
+        address(
+            kAudioDevicePropertyVolumeScalarToDecibels,
+            kAudioObjectPropertyScopeOutput,
+        ),
+        PropertySize::Known(size_of::<f32>() as u32),
+        read_f32,
+        encode_f32,
+    );
+
+/// Translates a linear scalar volume to its dB equivalent for the specified channel
+///
+/// The hardware applies its own non-linear mapping, so this gives a more
+/// accurate conversion than a generic formula
+/// Set the element to the channel and read back the converted dB value
+/// 
+/// Input scoped
+pub const DEVICE_INPUT_VOLUME_SCALAR_TO_DECIBELS: Property<f32, Device, ReadOnly, Silent, NeedElement> =
+    Property::new(
+        address(
+            kAudioDevicePropertyVolumeScalarToDecibels,
+            kAudioObjectPropertyScopeInput,
+        ),
+        PropertySize::Known(size_of::<f32>() as u32),
+        read_f32,
+        encode_f32,
+    );
+
 /// Translates a dB volume to its linear scalar equivalent for the specified channel
 ///
 /// The hardware applies its own non-linear mapping, so this gives a more
@@ -1024,6 +1096,42 @@ pub const DEVICE_VOLUME_DECIBELS_TO_SCALAR: Property<f32, Device, ReadOnly, Sile
         address(
             kAudioDevicePropertyVolumeDecibelsToScalar,
             kAudioObjectPropertyScopeGlobal,
+        ),
+        PropertySize::Known(size_of::<f32>() as u32),
+        read_f32,
+        encode_f32,
+    );
+
+/// Translates a dB volume to its linear scalar equivalent for the specified channel
+///
+/// The hardware applies its own non-linear mapping, so this gives a more
+/// accurate conversion than a generic formula
+/// Set the element to the channel and read back the converted scalar
+/// 
+/// Output scoped
+pub const DEVICE_OUTPUT_VOLUME_DECIBELS_TO_SCALAR: Property<f32, Device, ReadOnly, Silent, NeedElement> =
+    Property::new(
+        address(
+            kAudioDevicePropertyVolumeDecibelsToScalar,
+            kAudioObjectPropertyScopeOutput,
+        ),
+        PropertySize::Known(size_of::<f32>() as u32),
+        read_f32,
+        encode_f32,
+    );
+
+/// Translates a dB volume to its linear scalar equivalent for the specified channel
+///
+/// The hardware applies its own non-linear mapping, so this gives a more
+/// accurate conversion than a generic formula
+/// Set the element to the channel and read back the converted scalar
+/// 
+/// Input scoped
+pub const DEVICE_INPUT_VOLUME_DECIBELS_TO_SCALAR: Property<f32, Device, ReadOnly, Silent, NeedElement> =
+    Property::new(
+        address(
+            kAudioDevicePropertyVolumeDecibelsToScalar,
+            kAudioObjectPropertyScopeInput,
         ),
         PropertySize::Known(size_of::<f32>() as u32),
         read_f32,
