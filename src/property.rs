@@ -1034,6 +1034,42 @@ pub const DEVICE_VOLUME_RANGE_DECIBELS: Property<DBRange, Device, ReadOnly, Sile
         encode_db_range,
     );
 
+/// The minimum and maximum volume values in dB that the specified channel supports
+///
+/// Use this to set the bounds of a volume slider
+/// The minimum is typically a large negative number representing near-silence
+/// rather than true `-inf dB`
+/// 
+/// Output scoped
+pub const DEVICE_OUTPUT_VOLUME_RANGE_DECIBELS: Property<DBRange, Device, ReadOnly, Silent, NeedElement> =
+    Property::new(
+        address(
+            kAudioDevicePropertyVolumeRangeDecibels,
+            kAudioObjectPropertyScopeOutput,
+        ),
+        PropertySize::Known(size_of::<AudioValueRange>() as u32),
+        read_db_range,
+        encode_db_range,
+    );
+
+/// The minimum and maximum volume values in dB that the specified channel supports
+///
+/// Use this to set the bounds of a volume slider
+/// The minimum is typically a large negative number representing near-silence
+/// rather than true `-inf dB`
+/// 
+/// Input scoped
+pub const DEVICE_INPUT_VOLUME_RANGE_DECIBELS: Property<DBRange, Device, ReadOnly, Silent, NeedElement> =
+    Property::new(
+        address(
+            kAudioDevicePropertyVolumeRangeDecibels,
+            kAudioObjectPropertyScopeInput,
+        ),
+        PropertySize::Known(size_of::<AudioValueRange>() as u32),
+        read_db_range,
+        encode_db_range,
+    );
+
 /// Translates a linear scalar volume to its dB equivalent for the specified channel
 ///
 /// The hardware applies its own non-linear mapping, so this gives a more

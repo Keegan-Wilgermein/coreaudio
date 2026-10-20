@@ -386,6 +386,8 @@ Properties marked **both** require both calls (in either order).
 | `DEVICE_INPUT_VOLUME_DECIBELS` | `f32` | Read/Write | Yes | element |
 | `DEVICE_OUTPUT_VOLUME_DECIBELS` | `f32` | Read/Write | Yes | element |
 | `DEVICE_VOLUME_RANGE_DECIBELS` | `DBRange` | Read | No | element |
+| `DEVICE_OUTPUT_VOLUME_RANGE_DECIBELS` | `DBRange` | Read | No | element |
+| `DEVICE_INPUT_VOLUME_RANGE_DECIBELS` | `DBRange` | Read | No | element |
 | `DEVICE_VOLUME_SCALAR_TO_DECIBELS` | `f32` | Read | No | element |
 | `DEVICE_INPUT_VOLUME_SCALAR_TO_DECIBELS` | `f32` | Read | No | element |
 | `DEVICE_OUTPUT_VOLUME_SCALAR_TO_DECIBELS` | `f32` | Read | No | element |
