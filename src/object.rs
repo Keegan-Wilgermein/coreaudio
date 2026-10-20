@@ -168,6 +168,24 @@ impl<C> AudioObject<C> {
         get_property_internal(self.id, property)
     }
 
+    /// Reads a translation property, whose data starts as `value` and comes
+    /// back converted in place
+    ///
+    /// For properties like `DEVICE_OUTPUT_VOLUME_DECIBELS_TO_SCALAR`, where
+    /// CoreAudio reads its input from the data buffer itself
+    pub fn translate<V, D, A, L, E>(
+        &self,
+        property: Property<V, D, A, L, E>,
+        value: V,
+    ) -> Result<V, CoreAudioError>
+    where
+        D: ObjectCompatibleWith<C>,
+        E: HasAllData,
+    {
+        let buffer = (property.encode)(value).bytes;
+        read_property_internal(self.id, property, buffer)
+    }
+
     /// Returns the size in bytes of a property's data
     ///
     /// Uses the size recorded on the property when it is known, and otherwise
@@ -450,13 +468,23 @@ impl AudioObject<Tap> {}
 /// deserialises the result using `property.read`
 pub(crate) fn get_property_internal<V, D, A, L, E>(
     id: AudioObjectID,
+    property: Property<V, D, A, L, E>,
+) -> Result<V, CoreAudioError> {
+    let size = get_property_data_size_internal(id, &property)?;
+    read_property_internal(id, property, vec![0u8; size as usize])
+}
+
+/// Reads a property into `buffer`, which CoreAudio sees as the data's
+/// starting value, then deserialises it using `property.read`
+fn read_property_internal<V, D, A, L, E>(
+    id: AudioObjectID,
     mut property: Property<V, D, A, L, E>,
+    mut buffer: Vec<u8>,
 ) -> Result<V, CoreAudioError> {
     let (q_len, q_data) = get_q_data_len(&property);
-    let mut size = get_property_data_size_internal(id, &property)?;
+    let mut size = buffer.len() as u32;
 
     unsafe {
-        let mut buffer = vec![0u8; size as usize];
         AudioObjectGetPropertyData(
             id,
             property.address.non_null(),
