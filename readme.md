@@ -6,18 +6,32 @@ This crate provides typed access to audio devices, streams, and system-level aud
 
 ## Features
 
-- **Type-safe object model** — `AudioObject<System>`, `AudioObject<Device>`, `AudioObject<Stream>`, `AudioObject<Process>` and `AudioObject<Tap>` expose only the operations valid for each object type.
-- **Compile-time property safety** — Properties carry phantom types encoding their value type, owning object, read/write access, and listenability. Attempting to write a read-only property or listen to a non-listenable one is a compile error.
-- **Property builder methods** — Properties that require an element (channel) or qualifier data expose `.for_element(n)` and `.with_qualifier(value)` builder methods. Forgetting to call them is a compile error.
-- **Property listeners** — Subscribe to property changes with `add_listener`, then poll with `latest()`, drain with `all_since_last_check()`, or block with `block_until_change()` / `block_for_duration()`.
-- **Callback listeners** — `add_listener_with` hands every change straight to a closure on CoreAudio's notification thread, in order, with nothing blocking a thread to wait for it.
-- **Force methods** — `force_set_property`, `force_add_listener` and `force_add_listener_with` skip the property checks for devices that don't follow the usual conventions.
-- **IO Procs** — Register audio render callbacks on devices with `add_io_proc` and control playback with `play()` / `pause()`. Every buffer also carries the cycle's `Time` stamps, with the sample, host, word clock and SMPTE clocks each returned only if the device filled them in.
-- **Aggregate devices** — Combine several devices into one with `DeviceAggregateDevice`, or (with the `process-tap` feature) wrap a tap in an aggregate with `AppTapAggregateDevice`. Both can be private to your process or public, and are destroyed when dropped.
-- **Processes and taps** — List the processes using CoreAudio, and (with the `process-tap` feature) tap one app's audio before it's mixed, read through an aggregate device like any input.
-- **Channel layouts** — Read, write and listen to a device's speaker layout (`DEVICE_PREFERRED_CHANNEL_LAYOUT_OUTPUT`), expand predefined layouts with `layout_for_tag`, and get macOS's names for layouts and speakers.
-- **Structured error handling** — All CoreAudio `OSStatus` codes are mapped to a typed `ErrorKind` enum with human-readable four-character-code formatting.
-- **Format support** — Enums for audio format IDs (Linear PCM, AAC variants, ALAC, AC3, Opus, MP3, etc.), format flags, sample formats, transport types, and terminal types.
+- **Type-safe object model**<br>
+`AudioObject<System>`, `AudioObject<Device>`, `AudioObject<Stream>`, `AudioObject<Process>` and `AudioObject<Tap>` expose only the operations valid for each object type.
+- **Compile-time property safety**<br>
+Properties carry phantom types encoding their value type, owning object, read/write access, and listenability. Attempting to write a read-only property or listen to a non-listenable one is a compile error.
+- **Property builder methods**<br>
+Properties that require an element (channel) or qualifier data expose `.for_element(n)` and `.with_qualifier(value)` builder methods. Forgetting to call them is a compile error.
+- **Property listeners**<br>
+Subscribe to property changes with `add_listener`, then poll with `latest()`, drain with `all_since_last_check()`, or block with `block_until_change()` / `block_for_duration()`.
+- **Callback listeners**<br>
+`add_listener_with` hands every change straight to a closure on CoreAudio's notification thread, in order, with nothing blocking a thread to wait for it.
+- **Force methods**<br>
+`force_set_property`, `force_add_listener` and `force_add_listener_with` skip the property checks for devices that don't follow the usual conventions.
+- **IO Procs**<br>
+Register audio render callbacks on devices with `add_io_proc` and control playback with `play()` / `pause()`. Every buffer also carries the cycle's `Time` stamps, with the sample, host, word clock and SMPTE clocks each returned only if the device filled them in.
+- **Aggregate devices**<br>
+Combine several devices into one with `DeviceAggregateDevice`, or (with the `process-tap` feature) wrap a tap in an aggregate with `AppTapAggregateDevice`. Both can be private to your process or public, and are destroyed when dropped.
+- **Processes and taps**<br>
+List the processes using CoreAudio, and (with the `process-tap` feature) tap one app's audio before it's mixed, read through an aggregate device like any input.
+- **Custom properties**<br>
+Read and write the properties a plugin adds to its objects with `get_custom` / `set_custom`. Values are decoded by the type the driver declares into a `CustomValue`: a `String`, a `PropertyList`, or raw bytes.
+- **Channel layouts**<br>
+Read, write and listen to a device's speaker layout (`DEVICE_PREFERRED_CHANNEL_LAYOUT_OUTPUT`), expand predefined layouts with `layout_for_tag`, and get macOS's names for layouts and speakers.
+- **Structured error handling**<br>
+All CoreAudio `OSStatus` codes are mapped to a typed `ErrorKind` enum with human-readable four-character-code formatting.
+- **Format support**<br>
+Enums for audio format IDs (Linear PCM, AAC variants, ALAC, AC3, Opus, MP3, etc.), format flags, sample formats, transport types, and terminal types.
 
 ## Requirements
 
@@ -248,6 +262,56 @@ let listener = unsafe { device.force_add_listener_with(DEVICE_CAN_BE_DEFAULT, |v
 unsafe { device.force_set_property(DEVICE_OUTPUT_VOLUME_SCALAR, 0.5)?; }
 ```
 
+### Custom properties
+
+A HAL plug-in can add properties of its own. The crate has no constants for these, so `OBJECT_CUSTOM_PROPERTY_INFO_LIST` lists them instead. Each `CustomPropertyInfo` gives the property's selector, and the data types of its value and qualifier.
+
+Pass it to `get_custom` to read the property. The value comes back as a `CustomValue`, decoded by the data type the property declares:
+
+| Declared type | `CustomValue` |
+|---|---|
+| `CFString` | `String(String)` |
+| `CFPropertyList` | `PropertyList(PropertyList)`: a string, integer, float, bool, data, date, array or dictionary |
+| Anything else, such as raw data (`'raww'`) | `Raw(Vec<u8>)`: the bytes as the driver sent them |
+
+```rust
+use coreaudio::{AudioObject, Scope, System, OBJECT_CUSTOM_PROPERTY_INFO_LIST};
+
+let system = AudioObject::<System>::default();
+let device = system.current_device(Scope::Output)?;
+
+for info in device.get_property(OBJECT_CUSTOM_PROPERTY_INFO_LIST)? {
+    match device.get_custom(info, Scope::Global, 0, None) {
+        Ok(value) => println!("'{}': {value:?}", info.four_char_code()),
+        Err(e) => println!("'{}' couldn't be read: {e}", info.four_char_code()),
+    }
+}
+```
+
+The info list doesn't say which scope or element a property is on, so `get_custom` takes both. Most drivers use `Scope::Global` and element `0`, but nothing stops one from using input, output, or a channel.
+
+`set_custom` writes a value, `get_custom_data_size` returns the size of the data, and `translate_custom` passes a value in and reads the converted result back. A qualifier is also a `CustomValue`, passed as `Some(...)`, or `None` if the property doesn't take one.
+
+```rust
+use coreaudio::{CustomValue, PropertyList, Scope};
+
+// `info` is a `CFPropertyList` property from the list above
+device.set_custom(
+    info,
+    Scope::Global,
+    0,
+    None,
+    CustomValue::PropertyList(PropertyList::Integer(1)),
+)?;
+```
+
+Values and qualifiers are checked against the declared types before anything reaches CoreAudio, and a mismatch returns `ErrorKind::BadCustomData`. CoreAudio treats `CFString` and `CFPropertyList` data as a pointer to an object, so the check stops it following stray bytes as one. The rules:
+
+- **`CFString`:** takes a `CustomValue::String`.
+- **`CFPropertyList`:** takes a `CustomValue::PropertyList`, or a `CustomValue::String`, since a string is a property list too.
+- **Any other type:** takes `CustomValue::Raw`.
+- **Required qualifiers:** a property that declares a `CFString` or `CFPropertyList` qualifier must be given one.
+
 ### Working with streams
 
 ```rust
@@ -323,6 +387,8 @@ Properties marked **element** require `.for_element(channel)` before use.
 Properties marked **qualifier** require `.with_qualifier(value)` before use.  
 Properties marked **both** require both calls (in either order).
 
+Device properties named `DEVICE_INPUT_*` or `DEVICE_OUTPUT_*` read the input or output side of the device, and `DEVICE_PLAY_THRU_*` read its play-through side. The rest are global, except `DEVICE_PROCESS_MUTE` and the `DEVICE_VOICE_ACTIVITY_DETECTION_*` properties, which are input scoped. Many devices only implement a control on one side, so if the global property fails, try the scoped one.
+
 ### Object properties (all object types)
 
 | Constant | Type | Access | Listenable | Extra |
@@ -337,9 +403,13 @@ Properties marked **both** require both calls (in either order).
 | `OBJECT_ELEMENT_CATEGORY_NAME` | `String` | Read | No | element |
 | `OBJECT_ELEMENT_NUMBER_NAME` | `String` | Read | No | element |
 | `OBJECT_OWNED_OBJECTS` | `Vec<u32>` | Read | Yes | qualifier: `Vec<u32>` |
+| `OBJECT_NAME` | `String` | Read | Yes | — |
+| `OBJECT_IDENTIFY` | `bool` | Read/Write | Yes | — |
+| `OBJECT_SERIAL_NUMBER` | `String` | Read | No | — |
+| `OBJECT_FIRMWARE_VERSION` | `String` | Read | No | — |
+| `OBJECT_CUSTOM_PROPERTY_INFO_LIST` | `Vec<CustomPropertyInfo>` | Read | Yes | — |
 
 ### Device properties
-
 
 | Constant | Type | Access | Listenable | Extra |
 |---|---|---|---|---|
@@ -350,10 +420,14 @@ Properties marked **both** require both calls (in either order).
 | `DEVICE_TRANSPORT_TYPE` | `TransportType` | Read | Yes | — |
 | `DEVICE_IS_ALIVE` | `bool` | Read | Yes | — |
 | `DEVICE_IS_RUNNING` | `bool` | Read | Yes | — |
+| `DEVICE_IS_RUNNING_SOMEWHERE` | `bool` | Read | Yes | — |
 | `DEVICE_IS_HIDDEN` | `bool` | Read | Yes | — |
 | `DEVICE_CAN_BE_DEFAULT` | `bool` | Read | No | — |
+| `DEVICE_INPUT_CAN_BE_DEFAULT` | `bool` | Read | No | — |
+| `DEVICE_OUTPUT_CAN_BE_DEFAULT` | `bool` | Read | No | — |
 | `DEVICE_CAN_BE_DEFAULT_SYSTEM` | `bool` | Read | No | — |
 | `DEVICE_NOMINAL_SAMPLE_RATE` | `f64` | Read/Write | Yes | — |
+| `DEVICE_ACTUAL_SAMPLE_RATE` | `f64` | Read | Yes | — |
 | `DEVICE_AVAILABLE_SAMPLE_RATES` | `Vec<SampleRateRange>` | Read | Yes | — |
 | `DEVICE_BUFFER_FRAME_SIZE` | `u32` | Read/Write | Yes | — |
 | `DEVICE_BUFFER_FRAME_SIZE_RANGE` | `BufferFrameSizeRange` | Read | Yes | — |
@@ -366,19 +440,37 @@ Properties marked **both** require both calls (in either order).
 | `DEVICE_HOG_MODE` | `HogMode` | Read/Write | Yes | — |
 | `DEVICE_RELATED_DEVICES` | `Vec<u32>` | Read | Yes | — |
 | `DEVICE_PREFERRED_CHANNELS_FOR_STEREO` | `ChannelPair` | Read/Write | No | — |
+| `DEVICE_INPUT_PREFERRED_CHANNELS_FOR_STEREO` | `ChannelPair` | Read/Write | No | — |
+| `DEVICE_OUTPUT_PREFERRED_CHANNELS_FOR_STEREO` | `ChannelPair` | Read/Write | No | — |
 | `DEVICE_PREFERRED_CHANNEL_LAYOUT_INPUT` | `ChannelLayout` | Read/Write | Yes | — |
 | `DEVICE_PREFERRED_CHANNEL_LAYOUT_OUTPUT` | `ChannelLayout` | Read/Write | Yes | — |
+| `DEVICE_INPUT_STREAM_CONFIGURATION` | `Vec<u32>` | Read | Yes | — |
+| `DEVICE_OUTPUT_STREAM_CONFIGURATION` | `Vec<u32>` | Read | Yes | — |
 | `DEVICE_PROCESSOR_OVERLOAD` | `u32` | Read | Yes | — |
 | `DEVICE_IO_STOPPED_ABNORMALLY` | `u32` | Read | Yes | — |
 | `DEVICE_IO_CYCLE_USAGE` | `f32` | Read/Write | Yes | — |
 | `DEVICE_CLOCK_SOURCE` | `u32` | Read/Write | Yes | — |
 | `DEVICE_CLOCK_SOURCES` | `Vec<u32>` | Read | Yes | — |
 | `DEVICE_CLOCK_SOURCE_NAME` | `String` | Read | No | qualifier: `u32` |
+| `DEVICE_CLOCK_SOURCE_KIND` | `u32` | Read | No | qualifier: `u32` |
 | `DEVICE_PLAY_THRU_DESTINATION` | `u32` | Read/Write | Yes | — |
 | `DEVICE_PLAY_THRU_DESTINATIONS` | `Vec<u32>` | Read | No | — |
 | `DEVICE_PLAY_THRU_DESTINATION_NAME` | `String` | Read | No | qualifier: `u32` |
+| `DEVICE_PLAY_THRU` | `bool` | Read/Write | Yes | element |
+| `DEVICE_PLAY_THRU_SOLO` | `bool` | Read/Write | Yes | element |
+| `DEVICE_PLAY_THRU_VOLUME_SCALAR` | `f32` | Read/Write | Yes | element |
+| `DEVICE_PLAY_THRU_VOLUME_DECIBELS` | `f32` | Read/Write | Yes | element |
+| `DEVICE_PLAY_THRU_VOLUME_RANGE_DECIBELS` | `DBRange` | Read | No | element |
+| `DEVICE_PLAY_THRU_VOLUME_SCALAR_TO_DECIBELS` | `f32` | Read | No | element |
+| `DEVICE_PLAY_THRU_VOLUME_DECIBELS_TO_SCALAR` | `f32` | Read | No | element |
+| `DEVICE_PLAY_THRU_STEREO_PAN` | `f32` | Read/Write | Yes | element |
+| `DEVICE_PLAY_THRU_STEREO_PAN_CHANNELS` | `ChannelPair` | Read | No | element |
 | `DEVICE_INPUT_ELEMENT_NAME` | `String` | Read/Write | Yes | element |
 | `DEVICE_OUTPUT_ELEMENT_NAME` | `String` | Read/Write | Yes | element |
+| `DEVICE_INPUT_ELEMENT_CATEGORY_NAME` | `String` | Read | No | element |
+| `DEVICE_OUTPUT_ELEMENT_CATEGORY_NAME` | `String` | Read | No | element |
+| `DEVICE_INPUT_ELEMENT_NUMBER_NAME` | `String` | Read | No | element |
+| `DEVICE_OUTPUT_ELEMENT_NUMBER_NAME` | `String` | Read | No | element |
 | `DEVICE_GLOBAL_VOLUME_SCALAR` | `f32` | Read/Write | Yes | element |
 | `DEVICE_INPUT_VOLUME_SCALAR` | `f32` | Read/Write | Yes | element |
 | `DEVICE_OUTPUT_VOLUME_SCALAR` | `f32` | Read/Write | Yes | element |
@@ -395,32 +487,104 @@ Properties marked **both** require both calls (in either order).
 | `DEVICE_INPUT_VOLUME_DECIBELS_TO_SCALAR` | `f32` | Read | No | element |
 | `DEVICE_OUTPUT_VOLUME_DECIBELS_TO_SCALAR` | `f32` | Read | No | element |
 | `DEVICE_SUB_VOLUME_SCALAR` | `f32` | Read/Write | Yes | element |
+| `DEVICE_OUTPUT_SUB_VOLUME_SCALAR` | `f32` | Read/Write | Yes | element |
 | `DEVICE_SUB_VOLUME_DECIBELS` | `f32` | Read/Write | Yes | element |
+| `DEVICE_OUTPUT_SUB_VOLUME_DECIBELS` | `f32` | Read/Write | Yes | element |
 | `DEVICE_SUB_VOLUME_RANGE_DECIBELS` | `DBRange` | Read | No | element |
+| `DEVICE_OUTPUT_SUB_VOLUME_RANGE_DECIBELS` | `DBRange` | Read | No | element |
 | `DEVICE_SUB_VOLUME_SCALAR_TO_DECIBELS` | `f32` | Read | No | element |
+| `DEVICE_OUTPUT_SUB_VOLUME_SCALAR_TO_DECIBELS` | `f32` | Read | No | element |
 | `DEVICE_SUB_VOLUME_DECIBELS_TO_SCALAR` | `f32` | Read | No | element |
+| `DEVICE_OUTPUT_SUB_VOLUME_DECIBELS_TO_SCALAR` | `f32` | Read | No | element |
 | `DEVICE_STEREO_PAN` | `f32` | Read/Write | Yes | element |
+| `DEVICE_INPUT_STEREO_PAN` | `f32` | Read/Write | Yes | element |
+| `DEVICE_OUTPUT_STEREO_PAN` | `f32` | Read/Write | Yes | element |
 | `DEVICE_STEREO_PAN_CHANNELS` | `ChannelPair` | Read | No | element |
+| `DEVICE_INPUT_STEREO_PAN_CHANNELS` | `ChannelPair` | Read | No | element |
+| `DEVICE_OUTPUT_STEREO_PAN_CHANNELS` | `ChannelPair` | Read | No | element |
 | `DEVICE_GLOBAL_MUTE` | `bool` | Read/Write | Yes | element |
 | `DEVICE_INPUT_MUTE` | `bool` | Read/Write | Yes | element |
 | `DEVICE_OUTPUT_MUTE` | `bool` | Read/Write | Yes | element |
 | `DEVICE_SUB_MUTE` | `bool` | Read/Write | Yes | element |
+| `DEVICE_OUTPUT_SUB_MUTE` | `bool` | Read/Write | Yes | element |
 | `DEVICE_SOLO` | `bool` | Read/Write | Yes | element |
+| `DEVICE_INPUT_SOLO` | `bool` | Read/Write | Yes | element |
+| `DEVICE_OUTPUT_SOLO` | `bool` | Read/Write | Yes | element |
 | `DEVICE_PHANTOM_POWER` | `bool` | Read/Write | Yes | element |
+| `DEVICE_INPUT_PHANTOM_POWER` | `bool` | Read/Write | Yes | element |
 | `DEVICE_PHASE_INVERT` | `bool` | Read/Write | Yes | element |
+| `DEVICE_INPUT_PHASE_INVERT` | `bool` | Read/Write | Yes | element |
+| `DEVICE_OUTPUT_PHASE_INVERT` | `bool` | Read/Write | Yes | element |
 | `DEVICE_CLIP_LIGHT` | `bool` | Read/Write | Yes | element |
+| `DEVICE_INPUT_CLIP_LIGHT` | `bool` | Read/Write | Yes | element |
+| `DEVICE_OUTPUT_CLIP_LIGHT` | `bool` | Read/Write | Yes | element |
 | `DEVICE_TALKBACK` | `bool` | Read/Write | Yes | element |
+| `DEVICE_INPUT_TALKBACK` | `bool` | Read/Write | Yes | element |
+| `DEVICE_OUTPUT_TALKBACK` | `bool` | Read/Write | Yes | element |
 | `DEVICE_LISTENBACK` | `bool` | Read/Write | Yes | element |
+| `DEVICE_INPUT_LISTENBACK` | `bool` | Read/Write | Yes | element |
+| `DEVICE_OUTPUT_LISTENBACK` | `bool` | Read/Write | Yes | element |
 | `DEVICE_JACK_IS_CONNECTED` | `bool` | Read | Yes | element |
+| `DEVICE_INPUT_JACK_IS_CONNECTED` | `bool` | Read | Yes | element |
+| `DEVICE_OUTPUT_JACK_IS_CONNECTED` | `bool` | Read | Yes | element |
 | `DEVICE_DATA_SOURCE` | `u32` | Read/Write | Yes | element |
+| `DEVICE_INPUT_DATA_SOURCE` | `u32` | Read/Write | Yes | element |
+| `DEVICE_OUTPUT_DATA_SOURCE` | `u32` | Read/Write | Yes | element |
 | `DEVICE_DATA_SOURCES` | `Vec<u32>` | Read | No | element |
+| `DEVICE_INPUT_DATA_SOURCES` | `Vec<u32>` | Read | No | element |
+| `DEVICE_OUTPUT_DATA_SOURCES` | `Vec<u32>` | Read | No | element |
 | `DEVICE_DATA_SOURCE_NAME` | `String` | Read | No | element + qualifier: `u32` |
+| `DEVICE_INPUT_DATA_SOURCE_NAME` | `String` | Read | No | element + qualifier: `u32` |
+| `DEVICE_OUTPUT_DATA_SOURCE_NAME` | `String` | Read | No | element + qualifier: `u32` |
+| `DEVICE_DATA_SOURCE_KIND` | `u32` | Read | No | element + qualifier: `u32` |
+| `DEVICE_INPUT_DATA_SOURCE_KIND` | `u32` | Read | No | element + qualifier: `u32` |
+| `DEVICE_OUTPUT_DATA_SOURCE_KIND` | `u32` | Read | No | element + qualifier: `u32` |
 | `DEVICE_CHANNEL_NOMINAL_LINE_LEVEL` | `u32` | Read/Write | Yes | element |
+| `DEVICE_INPUT_CHANNEL_NOMINAL_LINE_LEVEL` | `u32` | Read/Write | Yes | element |
+| `DEVICE_OUTPUT_CHANNEL_NOMINAL_LINE_LEVEL` | `u32` | Read/Write | Yes | element |
 | `DEVICE_CHANNEL_NOMINAL_LINE_LEVELS` | `Vec<u32>` | Read | No | element |
+| `DEVICE_INPUT_CHANNEL_NOMINAL_LINE_LEVELS` | `Vec<u32>` | Read | No | element |
+| `DEVICE_OUTPUT_CHANNEL_NOMINAL_LINE_LEVELS` | `Vec<u32>` | Read | No | element |
 | `DEVICE_CHANNEL_NOMINAL_LINE_LEVEL_NAME` | `String` | Read | No | element + qualifier: `u32` |
+| `DEVICE_INPUT_CHANNEL_NOMINAL_LINE_LEVEL_NAME` | `String` | Read | No | element + qualifier: `u32` |
+| `DEVICE_OUTPUT_CHANNEL_NOMINAL_LINE_LEVEL_NAME` | `String` | Read | No | element + qualifier: `u32` |
 | `DEVICE_HIGH_PASS_FILTER_SETTING` | `u32` | Read/Write | Yes | element |
+| `DEVICE_INPUT_HIGH_PASS_FILTER_SETTING` | `u32` | Read/Write | Yes | element |
+| `DEVICE_OUTPUT_HIGH_PASS_FILTER_SETTING` | `u32` | Read/Write | Yes | element |
 | `DEVICE_HIGH_PASS_FILTER_SETTINGS` | `Vec<u32>` | Read | No | element |
+| `DEVICE_INPUT_HIGH_PASS_FILTER_SETTINGS` | `Vec<u32>` | Read | No | element |
+| `DEVICE_OUTPUT_HIGH_PASS_FILTER_SETTINGS` | `Vec<u32>` | Read | No | element |
 | `DEVICE_HIGH_PASS_FILTER_SETTING_NAME` | `String` | Read | No | element + qualifier: `u32` |
+| `DEVICE_INPUT_HIGH_PASS_FILTER_SETTING_NAME` | `String` | Read | No | element + qualifier: `u32` |
+| `DEVICE_OUTPUT_HIGH_PASS_FILTER_SETTING_NAME` | `String` | Read | No | element + qualifier: `u32` |
+| `DEVICE_ICON` | `PathBuf` | Read | No | — |
+| `DEVICE_CONTROL_LIST` | `Vec<u32>` | Read | Yes | — |
+| `DEVICE_PLUGIN` | `i32` | Read | Yes | — |
+| `DEVICE_HAS_CHANGED` | `u32` | Read | Yes | — |
+| `DEVICE_CLOCK_DEVICE` | `String` | Read | Yes | — |
+| `DEVICE_WANTS_CONTROLS_RESTORED` | `bool` | Read | No | — |
+| `DEVICE_WANTS_STREAM_FORMATS_RESTORED` | `bool` | Read | No | — |
+| `DEVICE_ZERO_TIME_STAMP_PERIOD` | `u32` | Read | No | — |
+| `DEVICE_CLOCK_ALGORITHM` | `ClockAlgorithm` | Read | No | — |
+| `DEVICE_CLOCK_IS_STABLE` | `bool` | Read | No | — |
+| `DEVICE_PROCESS_MUTE` | `bool` | Read/Write | Yes | — |
+| `DEVICE_VOICE_ACTIVITY_DETECTION_ENABLE` | `bool` | Read/Write | Yes | — |
+| `DEVICE_VOICE_ACTIVITY_DETECTION_STATE` | `bool` | Read | Yes | — |
+
+### Aggregate and end point device properties
+
+These are read from an `AudioObject<Device>`. The `AGGREGATE_*` properties only work on aggregate devices, such as the one `DeviceAggregateDevice::device()` returns, and the `END_POINT_*` properties only on end point devices.
+
+| Constant | Type | Access | Listenable | Extra |
+|---|---|---|---|---|
+| `AGGREGATE_FULL_SUB_DEVICE_LIST` | `Vec<String>` | Read/Write | Yes | — |
+| `AGGREGATE_ACTIVE_SUB_DEVICE_LIST` | `Vec<u32>` | Read | Yes | — |
+| `AGGREGATE_MAIN_SUB_DEVICE` | `String` | Read/Write | Yes | — |
+| `AGGREGATE_CLOCK_DEVICE` | `String` | Read/Write | Yes | — |
+| `AGGREGATE_TAP_LIST` | `Vec<String>` | Read/Write | Yes | — |
+| `AGGREGATE_SUB_TAP_LIST` | `Vec<u32>` | Read | Yes | — |
+| `END_POINT_LIST` | `Vec<u32>` | Read | Yes | — |
+| `END_POINT_IS_PRIVATE` | `i32` | Read | No | — |
 
 ### Stream properties
 
@@ -468,6 +632,9 @@ Properties marked **both** require both calls (in either order).
 | `SYSTEM_TRANSLATE_UID_TO_CLOCK_DEVICE` | `u32` | Read | No | qualifier: `String` |
 | `SYSTEM_TRANSLATE_BUNDLE_ID_TO_PLUGIN` | `u32` | Read | No | qualifier: `String` |
 | `SYSTEM_TRANSLATE_BUNDLE_ID_TO_TRANSPORT_MANAGER` | `u32` | Read | No | qualifier: `String` |
+| `SYSTEM_TRANSLATE_UID_TO_TAP` | `u32` | Read | No | qualifier: `String` |
+| `SYSTEM_TRANSLATE_PID_TO_PROCESS` | `u32` | Read | No | qualifier: `i32` |
+| `SYSTEM_PROCESS_INPUT_MUTE` | `bool` | Read/Write | Yes | — |
 
 ### Process properties
 
@@ -512,7 +679,6 @@ The `FormatId` enum covers Linear PCM, AAC (Standard, HE, HEv2, LD, ELD, ELDv2, 
 ## Roadmap
 
 - Dedicated `AudioObject<Clock>`, `AudioObject<Box>`, `AudioObject<Unit>`, and `AudioObject<Plugin>` with unique methods
-- Support for custom properties
 - Optional `usbmuxd` feature for enabling and disabling connected devices that communicate over usbmuxd
 - Add new wrappers and 'multi-properties' that combine multiple properties into one for things that shouldn't have to be seperate calls
 

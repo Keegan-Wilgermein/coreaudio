@@ -212,7 +212,7 @@ impl ChannelDescription {
     }
 
     /// Serialises the description as a native-endian `AudioChannelDescription`
-    pub(crate) fn to_bytes(&self) -> Vec<u8> {
+    pub(crate) fn to_bytes(self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(DESCRIPTION_SIZE);
         bytes.extend_from_slice(&self.label.0.to_ne_bytes());
         bytes.extend_from_slice(&self.flags.to_ne_bytes());

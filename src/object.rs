@@ -11,19 +11,22 @@
 
 // ---- Imports ------------
 use crate::{
-    data_types::{PropertySize, Scope},
-    errors::{CoreAudioError, OSStatusCheck},
+    data_types::{CustomPropertyDataType, CustomPropertyInfo, CustomValue, PropertySize, Scope},
+    encode::{encode_bytes, encode_custom},
+    errors::{CoreAudioError, ErrorKind, OSStatusCheck},
     io_proc::{AudioBuffer, IOProc},
     listener::{CallbackListener, PropertyListener},
     property::{
-        DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, Property, SYSTEM_DEFAULT_INPUT,
-        SYSTEM_DEFAULT_OUTPUT, SYSTEM_DEVICES, SYSTEM_PROCESS_OBJECT_LIST,
+        DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, NoExtra, Property, ReadWrite,
+        SYSTEM_DEFAULT_INPUT, SYSTEM_DEFAULT_OUTPUT, SYSTEM_DEVICES, SYSTEM_PROCESS_OBJECT_LIST,
+        Silent,
     },
+    read::{read_bytes, read_custom},
     traits::{CanListen, HasAllData, IntoNonNull, ObjectCompatibleWith, PtrIntoNonNull, Writeable},
 };
 use objc2_core_audio::{
     AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectID,
-    AudioObjectSetPropertyData, kAudioObjectSystemObject,
+    AudioObjectPropertyAddress, AudioObjectSetPropertyData, kAudioObjectSystemObject,
 };
 use std::{ffi::c_void, marker::PhantomData, ptr::null};
 
@@ -201,9 +204,99 @@ impl<C> AudioObject<C> {
         get_property_data_size_internal(self.id, &property)
     }
 
+    /// Reads a custom property, one a HAL plug-in added to this object
+    ///
+    /// `info` comes from [`OBJECT_CUSTOM_PROPERTY_INFO_LIST`](crate::OBJECT_CUSTOM_PROPERTY_INFO_LIST)
+    /// It doesn't say which scope or element the property is on; most are on
+    /// [`Scope::Global`] and element `0`
+    ///
+    /// The value is decoded by the data type the property declares: a
+    /// [`CustomValue::String`] for a `CFString`, a
+    /// [`CustomValue::PropertyList`] for a `CFPropertyList`, and the bytes as
+    /// they are in a [`CustomValue::Raw`] for anything else
+    ///
+    /// Returns [`ErrorKind::BadCustomData`] if `qualifier` doesn't fit the
+    /// qualifier type the property declares, or CoreAudio returns data that
+    /// doesn't fit its value type
+    pub fn get_custom(
+        &self,
+        info: CustomPropertyInfo,
+        scope: Scope,
+        element: u32,
+        qualifier: Option<CustomValue>,
+    ) -> Result<CustomValue, CoreAudioError> {
+        let property = custom_property(info, scope, element, qualifier)?;
+        let bytes = get_property_internal(self.id, property)?;
+        read_custom(info.property_data_type(), &bytes)
+    }
+
+    /// Writes a custom property, one a HAL plug-in added to this object
+    ///
+    /// See [`get_custom`](Self::get_custom) for the arguments
+    /// `value` has to fit the data type the property declares, the same way
+    /// [`get_custom`](Self::get_custom) decodes it
+    /// A `CFPropertyList` property also takes a [`CustomValue::String`]
+    ///
+    /// Returns [`ErrorKind::BadCustomData`] if `value` or `qualifier` don't
+    /// fit the property's declared types
+    pub fn set_custom(
+        &self,
+        info: CustomPropertyInfo,
+        scope: Scope,
+        element: u32,
+        qualifier: Option<CustomValue>,
+        value: CustomValue,
+    ) -> Result<(), CoreAudioError> {
+        let property = custom_property(info, scope, element, qualifier)?;
+
+        // Kept alive until the write has returned, since the bytes may point
+        // into it
+        let value = encode_custom(info.property_data_type(), value)?;
+
+        set_property_internal(self.id, property, value.bytes.clone())
+    }
+
+    /// Returns the size in bytes of a custom property's data
+    ///
+    /// A CoreFoundation value is a reference, so its size is that of a pointer
+    /// See [`get_custom`](Self::get_custom) for the arguments
+    pub fn get_custom_data_size(
+        &self,
+        info: CustomPropertyInfo,
+        scope: Scope,
+        element: u32,
+        qualifier: Option<CustomValue>,
+    ) -> Result<u32, CoreAudioError> {
+        let property = custom_property(info, scope, element, qualifier)?;
+        get_property_data_size_internal(self.id, &property)
+    }
+
+    /// Reads a custom property whose data starts as `value` and comes back
+    /// converted in place, like [`translate`](Self::translate)
+    ///
+    /// `value` is encoded as in [`set_custom`](Self::set_custom), and the
+    /// result decoded as in [`get_custom`](Self::get_custom)
+    pub fn translate_custom(
+        &self,
+        info: CustomPropertyInfo,
+        scope: Scope,
+        element: u32,
+        qualifier: Option<CustomValue>,
+        value: CustomValue,
+    ) -> Result<CustomValue, CoreAudioError> {
+        let property = custom_property(info, scope, element, qualifier)?;
+
+        // Kept alive until the read has returned, since the bytes may point
+        // into it
+        let value = encode_custom(info.property_data_type(), value)?;
+
+        let bytes = read_property_internal(self.id, property, value.bytes.clone())?;
+        read_custom(info.property_data_type(), &bytes)
+    }
+
     /// Writes a property value scoped to `C` compatible AudioObjects
     ///
-    /// The property constant must be [`ReadWrite`](crate::property::ReadWrite)
+    /// The property constant must be [`ReadWrite`]
     pub fn set_property<V, D, A, L, E>(
         &self,
         property: Property<V, D, A, L, E>,
@@ -364,19 +457,18 @@ impl AudioObject<System> {
         &self,
         scope: Scope,
     ) -> Result<Vec<AudioObject<Device>>, CoreAudioError> {
-        let all_devices = self.devices()?;
+        // Devices have no global streams
+        if scope == Scope::Global {
+            return Err(CoreAudioError::from_error_kind(ErrorKind::BadScope));
+        }
 
-        Ok(all_devices
+        Ok(self
+            .devices()?
             .into_iter()
             .filter(|device| {
-                let streams = match scope {
-                    Scope::Input => device.get_property(DEVICE_INPUT_STREAMS),
-                    Scope::Output => device.get_property(DEVICE_OUTPUT_STREAMS),
-                };
-
-                streams
-                    .map(|s: Vec<AudioObjectID>| !s.is_empty())
-                    .unwrap_or(false)
+                device
+                    .streams_with_scope(scope)
+                    .is_ok_and(|streams| !streams.is_empty())
             })
             .collect())
     }
@@ -397,6 +489,9 @@ impl AudioObject<System> {
         let id = match scope {
             Scope::Input => self.get_property(SYSTEM_DEFAULT_INPUT)?,
             Scope::Output => self.get_property(SYSTEM_DEFAULT_OUTPUT)?,
+            Scope::Global => {
+                return Err(CoreAudioError::from_error_kind(ErrorKind::BadScope));
+            }
         };
 
         Ok(AudioObject::<Device>::from(id))
@@ -429,6 +524,9 @@ impl AudioObject<Device> {
         let streams = match scope {
             Scope::Input => self.get_property(DEVICE_INPUT_STREAMS)?,
             Scope::Output => self.get_property(DEVICE_OUTPUT_STREAMS)?,
+            Scope::Global => {
+                return Err(CoreAudioError::from_error_kind(ErrorKind::BadScope));
+            }
         };
 
         Ok(streams
@@ -446,6 +544,11 @@ impl AudioObject<Device> {
     where
         F: FnMut(&mut [AudioBuffer]) + Send + 'static,
     {
+        // An IO proc reads or writes one side of the device
+        if scope == Scope::Global {
+            return Err(CoreAudioError::from_error_kind(ErrorKind::BadScope));
+        }
+
         IOProc::try_new(self, scope, callback)
     }
 }
@@ -495,6 +598,8 @@ fn read_property_internal<V, D, A, L, E>(
         )
         .check()?;
 
+        // CoreAudio may have written less than the buffer holds
+        buffer.truncate(size as usize);
         (property.read)(&buffer)
     }
 }
@@ -555,4 +660,42 @@ fn get_property_data_size_internal<V, D, A, L, E>(
             Ok(size)
         },
     }
+}
+
+/// A property for a custom selector, reading and writing raw bytes
+///
+/// Returns [`ErrorKind::BadCustomData`] if `qualifier` doesn't fit the
+/// qualifier type the property declares, or is missing where it declares a
+/// CoreFoundation one
+fn custom_property(
+    info: CustomPropertyInfo,
+    scope: Scope,
+    element: u32,
+    qualifier: Option<CustomValue>,
+) -> Result<Property<Vec<u8>, Global, ReadWrite, Silent, NoExtra>, CoreAudioError> {
+    let mut property = Property::new(
+        AudioObjectPropertyAddress {
+            mSelector: info.selector(),
+            mScope: scope.property_scope(),
+            mElement: element,
+        },
+        PropertySize::Unknown,
+        read_bytes,
+        encode_bytes,
+    );
+
+    property.qualifier = qualifier
+        .map(|qualifier| encode_custom(info.qualifier_data_type(), qualifier))
+        .transpose()?;
+
+    // CoreAudio would follow a missing CoreFoundation qualifier as a reference
+    let needs_object = matches!(
+        info.qualifier_data_type(),
+        CustomPropertyDataType::CFString | CustomPropertyDataType::CFPropertyList
+    );
+    if needs_object && property.qualifier.is_none() {
+        return Err(CoreAudioError::from_error_kind(ErrorKind::BadCustomData));
+    }
+
+    Ok(property)
 }

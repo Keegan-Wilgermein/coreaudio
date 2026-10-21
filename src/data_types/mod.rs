@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 
 mod channel_layout;
+mod custom;
 mod device;
 mod ranges;
 mod scope;
@@ -15,6 +16,7 @@ mod stream_format;
 mod time_format;
 
 pub use channel_layout::*;
+pub use custom::*;
 pub use device::*;
 pub use ranges::*;
 pub use scope::*;

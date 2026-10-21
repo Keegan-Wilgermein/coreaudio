@@ -21,7 +21,7 @@ use objc2_core_audio::{
     AudioDeviceStart, AudioDeviceStop,
 };
 use objc2_core_audio_types::{AudioBufferList, AudioTimeStamp};
-use std::ffi::c_void;
+use std::{ffi::c_void, ptr::NonNull};
 
 // ---- Structs ------------
 
@@ -189,7 +189,9 @@ impl IOProc {
                 device.id(),
                 // CoreAudio may pass null buffer lists, which the bindings' `NonNull`
                 // can't express; the callback checks for null itself
-                Some(std::mem::transmute::<RawIOProc, _>(io_callback::<F>)),
+                Some(std::mem::transmute::<RawIOProc, BindingIOProc>(
+                    io_callback::<F>,
+                )),
                 data_ptr,
                 (&mut proc_id).into(),
             )
@@ -272,6 +274,17 @@ type RawIOProc = extern "C-unwind" fn(
     *mut c_void,
 ) -> OSStatus;
 
+/// The IOProc signature the bindings take, which [`RawIOProc`] is transmuted to
+type BindingIOProc = unsafe extern "C-unwind" fn(
+    AudioDeviceID,
+    NonNull<AudioTimeStamp>,
+    NonNull<AudioBufferList>,
+    NonNull<AudioTimeStamp>,
+    NonNull<AudioBufferList>,
+    NonNull<AudioTimeStamp>,
+    *mut c_void,
+) -> OSStatus;
+
 /// Reads a time stamp CoreAudio passed to the callback
 ///
 /// A null pointer gives the default [`Time`], which has no valid clocks
@@ -311,6 +324,9 @@ where
         let list = match client_data.scope {
             Scope::Input => input as *mut AudioBufferList,
             Scope::Output => output,
+            Scope::Global => {
+                return -1;
+            }
         };
 
         let buffers: &mut [objc2_core_audio_types::AudioBuffer] = if list.is_null() {

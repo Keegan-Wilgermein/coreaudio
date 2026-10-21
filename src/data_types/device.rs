@@ -1,14 +1,15 @@
-//! Device-level enums: hog mode, power hints, transport and terminal types
+//! Device-level enums: hog mode, power hints, transport and terminal types,
+//! and clock algorithms
 
 #![allow(deprecated)] // `kAudioDeviceTransportTypeContinuityCapture` is still reported by older systems
 
 use crate::errors::{CoreAudioError, ErrorKind};
 use objc2_core_audio::{
-    kAudioDeviceTransportTypeAVB, kAudioDeviceTransportTypeAggregate,
-    kAudioDeviceTransportTypeAirPlay, kAudioDeviceTransportTypeAutoAggregate,
-    kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE,
-    kAudioDeviceTransportTypeBuiltIn, kAudioDeviceTransportTypeContinuityCapture,
-    kAudioDeviceTransportTypeContinuityCaptureWired,
+    AudioDeviceClockAlgorithmSelector, kAudioDeviceTransportTypeAVB,
+    kAudioDeviceTransportTypeAggregate, kAudioDeviceTransportTypeAirPlay,
+    kAudioDeviceTransportTypeAutoAggregate, kAudioDeviceTransportTypeBluetooth,
+    kAudioDeviceTransportTypeBluetoothLE, kAudioDeviceTransportTypeBuiltIn,
+    kAudioDeviceTransportTypeContinuityCapture, kAudioDeviceTransportTypeContinuityCaptureWired,
     kAudioDeviceTransportTypeContinuityCaptureWireless, kAudioDeviceTransportTypeDisplayPort,
     kAudioDeviceTransportTypeFireWire, kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypePCI,
     kAudioDeviceTransportTypeThunderbolt, kAudioDeviceTransportTypeUSB,
@@ -252,6 +253,47 @@ impl From<TerminalType> for u32 {
             TerminalType::HDMI => kAudioStreamTerminalTypeHDMI,
             TerminalType::DisplayPort => kAudioStreamTerminalTypeDisplayPort,
             TerminalType::Unknown(id) => id,
+        }
+    }
+}
+
+/// How the HAL filters a device's clock time stamps
+///
+/// Reported by `DEVICE_CLOCK_ALGORITHM`
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClockAlgorithm {
+    /// The time stamps are used as-is, with no filtering
+    Raw,
+    /// A simple IIR filter smooths the time stamps (the default)
+    SimpleIIR,
+    /// A 12 point moving window average smooths the time stamps
+    MovingWindowAverage12Point,
+    /// An unrecognised algorithm; contains the raw value
+    Unknown(u32),
+}
+
+impl From<u32> for ClockAlgorithm {
+    fn from(value: u32) -> Self {
+        match AudioDeviceClockAlgorithmSelector(value) {
+            AudioDeviceClockAlgorithmSelector::AlgorithmRaw => Self::Raw,
+            AudioDeviceClockAlgorithmSelector::AlgorithmSimpleIIR => Self::SimpleIIR,
+            AudioDeviceClockAlgorithmSelector::Algorithm12PtMovingWindowAverage => {
+                Self::MovingWindowAverage12Point
+            }
+            _ => Self::Unknown(value),
+        }
+    }
+}
+
+impl From<ClockAlgorithm> for u32 {
+    fn from(value: ClockAlgorithm) -> Self {
+        match value {
+            ClockAlgorithm::Raw => AudioDeviceClockAlgorithmSelector::AlgorithmRaw.0,
+            ClockAlgorithm::SimpleIIR => AudioDeviceClockAlgorithmSelector::AlgorithmSimpleIIR.0,
+            ClockAlgorithm::MovingWindowAverage12Point => {
+                AudioDeviceClockAlgorithmSelector::Algorithm12PtMovingWindowAverage.0
+            }
+            ClockAlgorithm::Unknown(id) => id,
         }
     }
 }

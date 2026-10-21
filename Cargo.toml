@@ -1,6 +1,6 @@
 [package]
 name = "coreaudio"
-version = "0.5.4"
+version = "0.6.0"
 edition = "2024"
 description = "A safe and simple wrapper around the CoreAudio HAL"
 license = "MIT"
@@ -17,7 +17,6 @@ process-tap = ["dep:objc2", "dep:objc2-foundation"]
 objc2-core-audio = "0.3.2"
 objc2-core-audio-types = "0.3.2"
 core-foundation = "0.10.1"
-num-traits = "0.2.19"
 objc2 = { version = "0.6", optional = true }
 objc2-foundation = { version = "0.3", optional = true, default-features = false, features = ["std", "NSArray", "NSString", "NSValue"] }
 objc2-audio-toolbox = { version = "0.3.2", default-features = false, features = ["std", "AudioFormat"] }

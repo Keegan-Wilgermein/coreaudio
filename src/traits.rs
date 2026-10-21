@@ -88,7 +88,7 @@ impl HasAllData for NoExtra {}
 ///
 /// Implement this for any type that can serve as qualifier data
 /// The built-in implementations cover the types accepted by CoreAudio
-/// qualifiers (`u32`, `Vec<u32>`, and `String`)
+/// qualifiers (`u32`, `i32`, `Vec<u32>`, and `String`)
 #[diagnostic::on_unimplemented(
     message = "incorrect qualifier data type",
     label = "check the `.with_qualifier()` method for expected type"
@@ -113,6 +113,12 @@ pub trait IntoQualifierBytes {
 impl IntoQualifierBytes for u32 {
     fn into_bytes(self) -> Vec<u8> {
         bytes_u32(self)
+    }
+}
+
+impl IntoQualifierBytes for i32 {
+    fn into_bytes(self) -> Vec<u8> {
+        self.to_ne_bytes().to_vec()
     }
 }
 

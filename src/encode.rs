@@ -5,13 +5,32 @@
 use crate::{
     Scope,
     data_types::{
-        BufferFrameSizeRange, ChannelLayout, ChannelPair, DBRange, HogMode, PowerHint,
+        BufferFrameSizeRange, ChannelLayout, ChannelPair, ClockAlgorithm, CustomPropertyDataType,
+        CustomPropertyInfo, CustomValue, DBRange, HogMode, PowerHint, PropertyList,
         SampleRateRange, StreamDescription, StreamRangedDescription, TerminalType, TransportType,
+        absolute_from_time,
     },
+    errors::{CoreAudioError, ErrorKind},
     property::Qualifier,
 };
-use objc2_core_audio::{AudioObjectID, AudioStreamRangedDescription};
-use objc2_core_audio_types::{AudioStreamBasicDescription, AudioValueRange};
+use core_foundation::{
+    array::CFArray,
+    base::{CFType, TCFType},
+    boolean::CFBoolean,
+    data::CFData,
+    date::CFDate,
+    dictionary::CFDictionary,
+    number::CFNumber,
+    string::CFString,
+    url::CFURL,
+};
+use objc2_core_audio::{
+    AudioObjectID, AudioServerPlugInCustomPropertyInfo, AudioStreamRangedDescription,
+};
+use objc2_core_audio_types::{
+    AudioBuffer, AudioBufferList, AudioStreamBasicDescription, AudioValueRange,
+};
+use std::{mem::offset_of, path::PathBuf};
 
 /// Serialises a [`PowerHint`] as a native-endian `u32`
 pub(crate) fn encode_power_hint(value: PowerHint) -> Qualifier {
@@ -163,4 +182,116 @@ pub(crate) fn encode_channel_pair(value: ChannelPair) -> Qualifier {
 pub(crate) fn encode_hog_mode(value: HogMode) -> Qualifier {
     let num: i32 = value.into();
     Qualifier::from_bytes(num.to_ne_bytes().to_vec())
+}
+
+/// Serialises a [`ClockAlgorithm`] as a native-endian `u32`
+pub(crate) fn encode_clock_algorithm(value: ClockAlgorithm) -> Qualifier {
+    Qualifier::from_bytes(bytes_u32(value.into()))
+}
+
+/// Encodes a path as the `CFURLRef` CoreAudio takes
+///
+/// A path that can't be made into a URL encodes as a null reference
+pub(crate) fn encode_path(value: PathBuf) -> Qualifier {
+    match CFURL::from_path(&value, value.is_dir()) {
+        Some(url) => Qualifier::from_object(url),
+        None => Qualifier::from_bytes(0usize.to_ne_bytes().to_vec()),
+    }
+}
+
+/// Encodes a `Vec<String>` as the `CFArrayRef` of `CFString`s CoreAudio takes
+///
+/// The returned value owns the `CFArray` the bytes point to, so it has to
+/// stay alive until `AudioObjectSetPropertyData` has returned
+pub(crate) fn encode_vec_string(value: Vec<String>) -> Qualifier {
+    let strings: Vec<CFString> = value.iter().map(|string| CFString::new(string)).collect();
+    Qualifier::from_object(CFArray::from_CFTypes(&strings))
+}
+
+/// Serialises a list of channel counts as an `AudioBufferList`, one buffer
+/// per count, with no data attached
+pub(crate) fn encode_buffer_list_channels(value: Vec<u32>) -> Qualifier {
+    let buffers_start = offset_of!(AudioBufferList, mBuffers);
+    let size = buffers_start + value.len().max(1) * size_of::<AudioBuffer>();
+    let mut bytes = vec![0u8; size];
+
+    bytes[..4].copy_from_slice(&(value.len() as u32).to_ne_bytes());
+    for (index, channels) in value.into_iter().enumerate() {
+        let start = buffers_start
+            + index * size_of::<AudioBuffer>()
+            + offset_of!(AudioBuffer, mNumberChannels);
+        bytes[start..start + 4].copy_from_slice(&channels.to_ne_bytes());
+    }
+
+    Qualifier::from_bytes(bytes)
+}
+
+/// Serialises a packed array of [`CustomPropertyInfo`] as
+/// `AudioServerPlugInCustomPropertyInfo`s
+pub(crate) fn encode_vec_custom_property_info(value: Vec<CustomPropertyInfo>) -> Qualifier {
+    Qualifier::from_bytes(
+        value
+            .into_iter()
+            .flat_map(|info| {
+                let raw: AudioServerPlugInCustomPropertyInfo = info.into();
+                [raw.mSelector, raw.mPropertyDataType, raw.mQualifierDataType]
+            })
+            .flat_map(u32::to_ne_bytes)
+            .collect(),
+    )
+}
+
+/// Passes `value` through as it is, for data the crate doesn't interpret
+pub(crate) fn encode_bytes(value: Vec<u8>) -> Qualifier {
+    Qualifier::from_bytes(value)
+}
+
+/// Encodes a custom property's value or qualifier the way its declared data
+/// type takes it
+///
+/// CoreFoundation types become a reference to an object the returned value
+/// keeps alive, and any other type takes [`CustomValue::Raw`] bytes as they
+/// are
+/// Returns [`ErrorKind::BadCustomData`] if `value` doesn't fit `data_type`
+pub(crate) fn encode_custom(
+    data_type: CustomPropertyDataType,
+    value: CustomValue,
+) -> Result<Qualifier, CoreAudioError> {
+    match (data_type, value) {
+        (
+            CustomPropertyDataType::CFString | CustomPropertyDataType::CFPropertyList,
+            CustomValue::String(string) | CustomValue::PropertyList(PropertyList::String(string)),
+        ) => Ok(Qualifier::from_string(&string)),
+        (CustomPropertyDataType::CFPropertyList, CustomValue::PropertyList(list)) => {
+            Ok(Qualifier::from_object(property_list_object(&list)))
+        }
+        (
+            CustomPropertyDataType::None | CustomPropertyDataType::Unknown(_),
+            CustomValue::Raw(bytes),
+        ) => Ok(Qualifier::from_bytes(bytes)),
+        _ => Err(CoreAudioError::from_error_kind(ErrorKind::BadCustomData)),
+    }
+}
+
+/// Builds the CoreFoundation object for a [`PropertyList`]
+pub(crate) fn property_list_object(list: &PropertyList) -> CFType {
+    match list {
+        PropertyList::String(string) => CFString::new(string).into_CFType(),
+        PropertyList::Integer(number) => CFNumber::from(*number).into_CFType(),
+        PropertyList::Float(number) => CFNumber::from(*number).into_CFType(),
+        PropertyList::Bool(boolean) => CFBoolean::from(*boolean).into_CFType(),
+        PropertyList::Data(bytes) => CFData::from_buffer(bytes).into_CFType(),
+        PropertyList::Date(time) => CFDate::new(absolute_from_time(*time)).into_CFType(),
+        PropertyList::Array(items) => {
+            let items: Vec<CFType> = items.iter().map(property_list_object).collect();
+            CFArray::from_CFTypes(&items).into_CFType()
+        }
+        PropertyList::Dictionary(entries) => {
+            let pairs: Vec<(CFString, CFType)> = entries
+                .iter()
+                .map(|(key, value)| (CFString::new(key), property_list_object(value)))
+                .collect();
+            CFDictionary::from_CFType_pairs(&pairs).into_CFType()
+        }
+    }
 }

@@ -54,8 +54,8 @@ impl BufferFrameSizeRange {
 ///
 /// Some devices report discrete rates as ranges where `min == max`; others
 /// report a true continuous range
-/// Use [`as_range`](Self::as_range) to get a standard Rust
-/// `RangeInclusive<f64>`
+/// Read the bounds with [`get_min`](Self::get_min) and
+/// [`get_max`](Self::get_max)
 #[derive(Debug, Clone, Copy)]
 pub struct SampleRateRange {
     /// Lowest supported sample rate in Hz

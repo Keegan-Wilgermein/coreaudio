@@ -112,6 +112,13 @@ pub enum ErrorKind {
     AlreadyRunning,
     /// `pause()` was called on an `IOProc` that is already paused
     AlreadyPaused,
+
+    // ---- Other errors ------------
+    /// Invalid scope for this location
+    BadScope,
+    /// A custom property's value or qualifier doesn't match the data type it
+    /// declares, whether it was passed in or came back from CoreAudio
+    BadCustomData,
 }
 
 // ---- Structs ------------
@@ -223,6 +230,13 @@ pub(crate) trait OSStatusStringify {
 }
 
 impl OSStatusStringify for OSStatus {
+    fn stringify_bytes(self) -> String {
+        let bytes = &self.to_be_bytes();
+        String::from_utf8_lossy(bytes).into_owned()
+    }
+}
+
+impl OSStatusStringify for u32 {
     fn stringify_bytes(self) -> String {
         let bytes = &self.to_be_bytes();
         String::from_utf8_lossy(bytes).into_owned()
