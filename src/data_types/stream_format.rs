@@ -343,6 +343,24 @@ impl From<FormatFlags> for u32 {
 }
 
 impl FormatFlags {
+    /// Flags from the sample encoding, and whether samples are big-endian,
+    /// packed, interleaved, and unmixable
+    pub fn new(
+        encoding: SampleEncoding,
+        is_big_endian: bool,
+        is_packed: bool,
+        is_interleaved: bool,
+        is_non_mixable: bool,
+    ) -> Self {
+        Self {
+            encoding,
+            is_big_endian,
+            is_packed,
+            is_interleaved,
+            is_non_mixable,
+        }
+    }
+
     /// The numeric encoding of each sample
     pub fn encoding(&self) -> SampleEncoding {
         self.encoding
@@ -366,6 +384,32 @@ impl FormatFlags {
     /// `true` if this stream cannot be mixed with others by the HAL
     pub fn is_non_mixable(&self) -> bool {
         self.is_non_mixable
+    }
+
+    /// Sets the numeric encoding of each sample
+    pub fn set_encoding(&mut self, encoding: SampleEncoding) {
+        self.encoding = encoding;
+    }
+
+    /// Sets whether multi-byte samples are stored in big-endian byte order
+    pub fn set_big_endian(&mut self, is_big_endian: bool) {
+        self.is_big_endian = is_big_endian;
+    }
+
+    /// Sets whether sample bits fill their container word with no padding
+    pub fn set_packed(&mut self, is_packed: bool) {
+        self.is_packed = is_packed;
+    }
+
+    /// Sets whether channel data is interleaved within a single buffer
+    pub fn set_interleaved(&mut self, is_interleaved: bool) {
+        self.is_interleaved = is_interleaved;
+    }
+
+    /// Sets whether this stream is prohibited from being mixed with others by
+    /// the HAL
+    pub fn set_non_mixable(&mut self, is_non_mixable: bool) {
+        self.is_non_mixable = is_non_mixable;
     }
 }
 
@@ -487,6 +531,35 @@ impl From<StreamDescription> for AudioStreamBasicDescription {
 }
 
 impl StreamDescription {
+    /// A description from each field of an `AudioStreamBasicDescription`
+    ///
+    /// The [`sample_format`](Self::sample_format) is worked out from
+    /// `bits_per_channel` and the flags' encoding
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        sample_rate: f64,
+        format_id: FormatId,
+        flags: FormatFlags,
+        bytes_per_packet: u32,
+        frames_per_packet: u32,
+        bytes_per_frame: u32,
+        channels_per_frame: u32,
+        bits_per_channel: u32,
+    ) -> Self {
+        Self {
+            sample_rate,
+            format_id,
+            flags,
+            sample_format: SampleFormat::from(bits_per_channel, flags.encoding),
+            bytes_per_packet,
+            frames_per_packet,
+            bytes_per_frame,
+            channels_per_frame,
+            bits_per_channel,
+            reserved: 0,
+        }
+    }
+
     /// Sample rate in Hz
     pub fn sample_rate(&self) -> f64 {
         self.sample_rate
@@ -525,6 +598,60 @@ impl StreamDescription {
     /// Number of channels per frame
     pub fn channels_per_frame(&self) -> u32 {
         self.channels_per_frame
+    }
+
+    /// Valid audio bits per channel, which may be less than the container
+    /// word size
+    pub fn bits_per_channel(&self) -> u32 {
+        self.bits_per_channel
+    }
+
+    /// Sets the sample rate in Hz
+    pub fn set_sample_rate(&mut self, sample_rate: f64) {
+        self.sample_rate = sample_rate;
+    }
+
+    /// Sets the codec or compression scheme
+    pub fn set_format_id(&mut self, format_id: FormatId) {
+        self.format_id = format_id;
+    }
+
+    /// Sets the format flags
+    ///
+    /// Also updates the [`sample_format`](Self::sample_format), which depends
+    /// on the flags' encoding
+    pub fn set_flags(&mut self, flags: FormatFlags) {
+        self.flags = flags;
+        self.sample_format = SampleFormat::from(self.bits_per_channel, flags.encoding);
+    }
+
+    /// Sets the bytes per compressed packet (equals `bytes_per_frame` for PCM)
+    pub fn set_bytes_per_packet(&mut self, bytes_per_packet: u32) {
+        self.bytes_per_packet = bytes_per_packet;
+    }
+
+    /// Sets the frames per compressed packet (always `1` for PCM)
+    pub fn set_frames_per_packet(&mut self, frames_per_packet: u32) {
+        self.frames_per_packet = frames_per_packet;
+    }
+
+    /// Sets the bytes in one audio frame
+    pub fn set_bytes_per_frame(&mut self, bytes_per_frame: u32) {
+        self.bytes_per_frame = bytes_per_frame;
+    }
+
+    /// Sets the number of channels per frame
+    pub fn set_channels_per_frame(&mut self, channels_per_frame: u32) {
+        self.channels_per_frame = channels_per_frame;
+    }
+
+    /// Sets the valid audio bits per channel
+    ///
+    /// Also updates the [`sample_format`](Self::sample_format), which depends
+    /// on the bit depth
+    pub fn set_bits_per_channel(&mut self, bits_per_channel: u32) {
+        self.bits_per_channel = bits_per_channel;
+        self.sample_format = SampleFormat::from(bits_per_channel, self.flags.encoding);
     }
 }
 
@@ -570,5 +697,56 @@ impl StreamRangedDescription {
     /// The sample rate range supported for this format
     pub fn sample_rate_range(&self) -> SampleRateRange {
         self.sample_rate_range
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 48 kHz stereo interleaved 32-bit float PCM
+    fn float_stereo() -> StreamDescription {
+        let flags = FormatFlags::new(SampleEncoding::Float, false, true, true, false);
+        StreamDescription::new(48000.0, FormatId::LinearPCM, flags, 8, 1, 8, 2, 32)
+    }
+
+    /// A built description survives the trip through `AudioStreamBasicDescription`
+    #[test]
+    fn stream_description_round_trips() {
+        let description = float_stereo();
+        assert_eq!(description.sample_format(), Some(SampleFormat::F32));
+
+        let raw: AudioStreamBasicDescription = description.into();
+        assert_eq!(raw.mFormatID, kAudioFormatLinearPCM);
+        assert_eq!(
+            raw.mFormatFlags,
+            kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked
+        );
+        assert_eq!(raw.mChannelsPerFrame, 2);
+        assert_eq!(raw.mReserved, 0);
+
+        let back = StreamDescription::from(raw);
+        assert_eq!(back.sample_rate(), 48000.0);
+        assert_eq!(back.bits_per_channel(), 32);
+        assert_eq!(back.sample_format(), Some(SampleFormat::F32));
+    }
+
+    /// Changing the bit depth or encoding keeps the sample format in step
+    #[test]
+    fn setters_update_sample_format() {
+        let mut description = float_stereo();
+
+        description.set_bits_per_channel(64);
+        assert_eq!(description.sample_format(), Some(SampleFormat::F64));
+
+        let mut flags = description.flags();
+        flags.set_encoding(SampleEncoding::SignedInt);
+        flags.set_interleaved(false);
+        description.set_flags(flags);
+        assert_eq!(description.sample_format(), Some(SampleFormat::I64));
+        assert!(!description.flags().is_interleaved());
+
+        description.set_bits_per_channel(12);
+        assert_eq!(description.sample_format(), None);
     }
 }

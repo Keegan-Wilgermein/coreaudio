@@ -196,6 +196,19 @@ impl From<ChannelLabel> for ChannelDescription {
 }
 
 impl ChannelDescription {
+    /// A description from the speaker the channel feeds, the
+    /// `AudioChannelFlags` describing its coordinates, and the coordinates
+    ///
+    /// Use [`From<ChannelLabel>`](Self::from) for a channel with no
+    /// coordinates
+    pub fn new(label: ChannelLabel, flags: u32, coordinates: [f32; 3]) -> Self {
+        Self {
+            label,
+            flags,
+            coordinates,
+        }
+    }
+
     /// The speaker the channel feeds
     pub fn label(&self) -> ChannelLabel {
         self.label
@@ -209,6 +222,22 @@ impl ChannelDescription {
     /// Speaker coordinates, meaningful only when flags are set
     pub fn coordinates(&self) -> [f32; 3] {
         self.coordinates
+    }
+
+    /// Sets the speaker the channel feeds
+    pub fn set_label(&mut self, label: ChannelLabel) {
+        self.label = label;
+    }
+
+    /// Sets the `AudioChannelFlags` describing the coordinates
+    pub fn set_flags(&mut self, flags: u32) {
+        self.flags = flags;
+    }
+
+    /// Sets the speaker coordinates, used when the label is
+    /// `kAudioChannelLabel_UseCoordinates`
+    pub fn set_coordinates(&mut self, coordinates: [f32; 3]) {
+        self.coordinates = coordinates;
     }
 
     /// Serialises the description as a native-endian `AudioChannelDescription`
@@ -283,6 +312,20 @@ impl From<Vec<ChannelLabel>> for ChannelLayout {
 }
 
 impl ChannelLayout {
+    /// A layout from its tag, bitmap and channel descriptions
+    ///
+    /// CoreAudio only reads the bitmap when the tag is `USE_CHANNEL_BITMAP`,
+    /// and the descriptions when it is `USE_CHANNEL_DESCRIPTIONS`
+    /// [`From<ChannelLayoutTag>`](Self::from) and
+    /// [`From<Vec<ChannelLabel>>`](Self::from) build the common cases
+    pub fn new(tag: ChannelLayoutTag, bitmap: u32, descriptions: Vec<ChannelDescription>) -> Self {
+        Self {
+            tag,
+            bitmap,
+            descriptions,
+        }
+    }
+
     /// The predefined layout, or `USE_CHANNEL_DESCRIPTIONS` / `USE_CHANNEL_BITMAP`
     pub fn tag(&self) -> ChannelLayoutTag {
         self.tag
@@ -302,6 +345,24 @@ impl ChannelLayout {
     /// Empty unless the layout is given by descriptions
     pub fn labels(&self) -> Vec<ChannelLabel> {
         self.descriptions.iter().map(|d| d.label).collect()
+    }
+
+    /// Sets the predefined layout, or `USE_CHANNEL_DESCRIPTIONS` /
+    /// `USE_CHANNEL_BITMAP`
+    pub fn set_tag(&mut self, tag: ChannelLayoutTag) {
+        self.tag = tag;
+    }
+
+    /// Sets the `AudioChannelBitmap`, used when the tag is
+    /// `USE_CHANNEL_BITMAP`
+    pub fn set_bitmap(&mut self, bitmap: u32) {
+        self.bitmap = bitmap;
+    }
+
+    /// Sets the channel descriptions, used when the tag is
+    /// `USE_CHANNEL_DESCRIPTIONS`
+    pub fn set_descriptions(&mut self, descriptions: Vec<ChannelDescription>) {
+        self.descriptions = descriptions;
     }
 
     /// Serialises the layout as a native-endian `AudioChannelLayout`

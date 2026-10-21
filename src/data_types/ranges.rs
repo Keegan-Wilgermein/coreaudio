@@ -164,6 +164,12 @@ impl From<[u32; 2]> for ChannelPair {
 }
 
 impl ChannelPair {
+    /// A pair from the one-based device channel indices of the left and right
+    /// signals
+    pub fn new(left: u32, right: u32) -> Self {
+        Self { left, right }
+    }
+
     /// One-based device channel index for the left signal
     pub fn left(&self) -> u32 {
         self.left
@@ -172,6 +178,16 @@ impl ChannelPair {
     /// One-based device channel index for the right signal
     pub fn right(&self) -> u32 {
         self.right
+    }
+
+    /// Sets the one-based device channel index for the left signal
+    pub fn set_left(&mut self, left: u32) {
+        self.left = left;
+    }
+
+    /// Sets the one-based device channel index for the right signal
+    pub fn set_right(&mut self, right: u32) {
+        self.right = right;
     }
 
     /// Returns the pair as a two-element array `[left, right]`
