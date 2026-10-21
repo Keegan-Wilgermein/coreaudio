@@ -10,19 +10,21 @@
 //!
 //! A [`CallbackListener`] instead hands every change straight to a closure on
 //! CoreAudio's notification thread, so nothing has to wait on a thread for it
+//! A [`CustomCallbackListener`] does the same for a custom property
 //!
-//! Dropping either one automatically removes the CoreAudio listener
+//! Dropping any of them automatically removes the CoreAudio listener
 
 #![allow(unsafe_code)]
 
 // ---- Imports --------
 use crate::errors::OSStatus;
 use crate::{
-    Property,
-    data_types::PropertySize,
+    Global, Property,
+    data_types::{CustomPropertyDataType, CustomValue, PropertySize},
     errors::{CoreAudioError, ErrorKind, OSStatusCheck},
     object::get_property_internal,
-    property::{Listenable, NoExtra, Qualifier},
+    property::{Listenable, NoExtra, Qualifier, ReadWrite},
+    read::{read_bytes, read_custom},
 };
 use objc2_core_audio::{
     AudioObjectAddPropertyListener, AudioObjectID, AudioObjectPropertyAddress,
@@ -287,6 +289,52 @@ impl<T, D, A> CallbackListener<T, D, A> {
     /// Equivalent to dropping `self`; provided for explicit, readable teardown
     pub fn remove(self) {
         drop(self);
+    }
+}
+
+/// Watches a custom property and calls a closure on every change
+///
+/// Works like a [`CallbackListener`], with each new value decoded the way
+/// [`get_custom`](crate::AudioObject::get_custom) decodes it
+///
+/// Obtain a `CustomCallbackListener` by calling `add_custom_listener_with` on
+/// an [`AudioObject`](crate::AudioObject)
+/// Dropping it removes the listener
+pub struct CustomCallbackListener {
+    /// Reads the raw data, which the sink decodes
+    listener: CallbackListener<Vec<u8>, Global, ReadWrite>,
+}
+
+impl CustomCallbackListener {
+    /// Registers a listener for the custom property at `address` that decodes
+    /// each new value as `data_type` and calls `sink` with it
+    pub(crate) fn try_new<S>(
+        id: AudioObjectID,
+        address: AudioObjectPropertyAddress,
+        data_type: CustomPropertyDataType,
+        sink: S,
+    ) -> Result<Self, CoreAudioError>
+    where
+        S: Fn(Result<CustomValue, CoreAudioError>) + Send + Sync + 'static,
+    {
+        let listener = CallbackListener::try_new(
+            id,
+            PropertySize::Unknown,
+            address,
+            read_bytes,
+            move |bytes: Result<Vec<u8>, CoreAudioError>| {
+                sink(bytes.and_then(|bytes| read_custom(data_type, &bytes)))
+            },
+        )?;
+
+        Ok(Self { listener })
+    }
+
+    /// Unregisters the listener and releases all associated resources
+    ///
+    /// Equivalent to dropping `self`; provided for explicit, readable teardown
+    pub fn remove(self) {
+        self.listener.remove();
     }
 }
 

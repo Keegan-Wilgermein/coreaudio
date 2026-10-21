@@ -15,7 +15,7 @@ use crate::{
     encode::{encode_bytes, encode_custom},
     errors::{CoreAudioError, ErrorKind, OSStatusCheck},
     io_proc::{AudioBuffer, IOProc},
-    listener::{CallbackListener, PropertyListener},
+    listener::{CallbackListener, CustomCallbackListener, PropertyListener},
     property::{
         DEVICE_INPUT_STREAMS, DEVICE_OUTPUT_STREAMS, NoExtra, Property, ReadWrite,
         SYSTEM_DEFAULT_INPUT, SYSTEM_DEFAULT_OUTPUT, SYSTEM_DEVICES, SYSTEM_PROCESS_OBJECT_LIST,
@@ -269,6 +269,34 @@ impl<C> AudioObject<C> {
     ) -> Result<u32, CoreAudioError> {
         let property = custom_property(info, scope, element, qualifier)?;
         get_property_data_size_internal(self.id, &property)
+    }
+
+    /// Registers a listener for a custom property that calls `sink` on every
+    /// change
+    ///
+    /// See [`get_custom`](Self::get_custom) for the arguments and how each new
+    /// value is decoded, and [`add_listener_with`](Self::add_listener_with) for
+    /// how `sink` is called
+    /// A driver doesn't have to send notifications for its custom properties,
+    /// so the listener may never fire
+    ///
+    /// The listener reads each new value without a qualifier, so a property
+    /// that declares a `CFString` or `CFPropertyList` qualifier returns
+    /// [`ErrorKind::BadCustomData`]
+    ///
+    /// Drop the returned [`CustomCallbackListener`] to unregister
+    pub fn add_custom_listener_with<S>(
+        &self,
+        info: CustomPropertyInfo,
+        scope: Scope,
+        element: u32,
+        sink: S,
+    ) -> Result<CustomCallbackListener, CoreAudioError>
+    where
+        S: Fn(Result<CustomValue, CoreAudioError>) + Send + Sync + 'static,
+    {
+        let property = custom_property(info, scope, element, None)?;
+        CustomCallbackListener::try_new(self.id, property.address, info.property_data_type(), sink)
     }
 
     /// Reads a custom property whose data starts as `value` and comes back

@@ -23,6 +23,7 @@ fn main() {
     suite::object::run(test_output);
     suite::device::run(test_output, test_input);
     suite::aggregate::run(test_output);
+    suite::custom::run(test_output);
     suite::errors::run(test_output);
     suite::listener::run(test_output);
     suite::io_proc::run(test_output, test_input);

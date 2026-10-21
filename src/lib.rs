@@ -101,7 +101,7 @@ pub use device_aggregate::DeviceAggregateDevice;
 pub use tap::{ProcessTap, TapMute};
 
 // Listener
-pub use listener::{CallbackListener, PropertyListener};
+pub use listener::{CallbackListener, CustomCallbackListener, PropertyListener};
 
 // IO Proc
 pub use io_proc::{AudioBuffer, IOProc};

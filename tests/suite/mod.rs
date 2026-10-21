@@ -7,6 +7,7 @@
 //! property that misbehaves
 
 pub mod aggregate;
+pub mod custom;
 pub mod device;
 pub mod errors;
 pub mod io_proc;

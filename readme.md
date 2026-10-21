@@ -292,10 +292,17 @@ The info list doesn't say which scope or element a property is on, so `get_custo
 
 `set_custom` writes a value, `get_custom_data_size` returns the size of the data, and `translate_custom` passes a value in and reads the converted result back. A qualifier is also a `CustomValue`, passed as `Some(...)`, or `None` if the property doesn't take one.
 
+`add_custom_listener_with` works like `add_listener_with`. It calls a closure with every new value, decoded the same way as `get_custom`, and dropping the returned `CustomCallbackListener` unregisters it. It reads each change without a qualifier, so properties that require a `CFString` or `CFPropertyList` qualifier are refused. Plugins don't have to send notifications for their custom properties, so some never fire.
+
+```rust
+let listener = device.add_custom_listener_with(info, Scope::Global, 0, |value: Result<CustomValue, CoreAudioError>| {
+    println!("{value:?}");
+})?;
+```
+
 ```rust
 use coreaudio::{CustomValue, PropertyList, Scope};
 
-// `info` is a `CFPropertyList` property from the list above
 device.set_custom(
     info,
     Scope::Global,
